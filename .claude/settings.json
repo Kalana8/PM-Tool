@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node verify6.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(rm -rf .next)",
+      "Bash(npm run *)",
+      "Bash(node verify7.js)",
+      "Bash(node debug.js)",
+      "Bash(kill -9 6466)",
+      "Bash(pkill -f \"next start\")",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs -r kill -9)",
+      "Bash(node verify8.js)",
+      "Bash(node debug2.js)",
+      "Bash(ps -p 7139 -o pid,command)",
+      "Bash(curl -sv \"http://localhost:3000/_next/static/chunks/255-9360bdb363010bcb.js\" -o /tmp/chunk_test.js -w \"HTTP_CODE:%{http_code}\\\\n\")",
+      "Bash(kill -9 7139 7171 7172)",
+      "Bash(echo \"cleared: $?\")",
+      "Bash(node verify9.js)",
+      "Bash(node verify10.js)",
+      "Bash(node render-pdf.js)",
+      "Bash(brew list *)",
+      "Bash(node screenshot-html.js)"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise Project & Employee Management",
+  "description": "A premium enterprise-grade SaaS platform for employee attendance, department projects, and task management across Admin, Team Leader, and Team Member workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
