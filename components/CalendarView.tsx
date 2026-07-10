@@ -45,6 +45,11 @@ export default function CalendarView({ tasks, users, projects, userRole, current
   const [quickCategory, setQuickCategory] = useState<TaskCategory>('daily');
   const [quickPriority, setQuickPriority] = useState<TaskPriority>('Medium');
   const [quickAssignedTo, setQuickAssignedTo] = useState('');
+  const [quickStartDate, setQuickStartDate] = useState('');
+  const [quickStartTime, setQuickStartTime] = useState('09:00');
+  const [quickDueDate, setQuickDueDate] = useState('');
+  const [quickDueTime, setQuickDueTime] = useState('10:00');
+  const [quickAllDay, setQuickAllDay] = useState(false);
 
   const handleOpenQuickAdd = (e: React.MouseEvent, dateStr: string) => {
     e.stopPropagation();
@@ -54,6 +59,11 @@ export default function CalendarView({ tasks, users, projects, userRole, current
     setQuickCategory('daily');
     setQuickPriority('Medium');
     setQuickAssignedTo(userRole === 'Team Member' && currentUserId ? currentUserId : '');
+    setQuickStartDate(dateStr);
+    setQuickStartTime('09:00');
+    setQuickDueDate(dateStr);
+    setQuickDueTime('10:00');
+    setQuickAllDay(false);
   };
 
   const handleCloseQuickAdd = () => setAddTaskDateStr(null);
@@ -72,8 +82,10 @@ export default function CalendarView({ tasks, users, projects, userRole, current
       priority: quickPriority,
       status: 'Todo',
       progress: 0,
-      startDate: addTaskDateStr,
-      dueDate: addTaskDateStr,
+      startDate: quickStartDate || addTaskDateStr,
+      startTime: quickAllDay ? undefined : quickStartTime,
+      dueDate: quickDueDate || addTaskDateStr,
+      dueTime: quickAllDay ? undefined : quickDueTime,
       assignedTo: quickAssignedTo
     });
 
@@ -534,7 +546,9 @@ export default function CalendarView({ tasks, users, projects, userRole, current
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Add Task</h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">Due {addTaskDateStr}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {quickStartDate}{!quickAllDay ? ` ${quickStartTime}` : ''} → {quickDueDate}{!quickAllDay ? ` ${quickDueTime}` : ''}
+                </p>
               </div>
               <button
                 id="close-quick-add-task"
@@ -590,6 +604,77 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                   ))}
                 </select>
               </div>
+
+              {/* Teams-style start/due date & time scheduling */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
+                  <input
+                    id="quick-task-startdate-input"
+                    type="date"
+                    required
+                    value={quickStartDate}
+                    onChange={(e) => setQuickStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Time</label>
+                  <input
+                    id="quick-task-starttime-input"
+                    type="time"
+                    disabled={quickAllDay}
+                    value={quickStartTime}
+                    onChange={(e) => setQuickStartTime(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
+                  <input
+                    id="quick-task-duedate-input"
+                    type="date"
+                    required
+                    value={quickDueDate}
+                    onChange={(e) => setQuickDueDate(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Time</label>
+                  <input
+                    id="quick-task-duetime-input"
+                    type="time"
+                    disabled={quickAllDay}
+                    value={quickDueTime}
+                    onChange={(e) => setQuickDueTime(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <button
+                  id="quick-task-allday-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={quickAllDay}
+                  onClick={() => setQuickAllDay((prev) => !prev)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                    quickAllDay ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-800'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      quickAllDay ? 'translate-x-4.5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">All day</span>
+              </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -7,11 +7,9 @@ import {
   ChevronRight,
   Sun,
   Moon,
-  Users,
-  Check,
   Bookmark,
   ShieldCheck,
-  Award
+  LogOut
 } from 'lucide-react';
 import { User, Notification } from '../lib/types';
 
@@ -20,13 +18,13 @@ interface HeaderProps {
   selectedProjectName?: string;
   onSearchClick: () => void;
   userRole: 'Admin' | 'Team Leader' | 'Team Member';
-  onRoleChange: (role: 'Admin' | 'Team Leader' | 'Team Member') => void;
   currentUser: User;
   notifications: Notification[];
   onMarkNotificationsRead: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onNavigate: (view: string, targetId?: string) => void;
+  onSignOut: () => void;
 }
 
 export default function Header({
@@ -34,28 +32,16 @@ export default function Header({
   selectedProjectName,
   onSearchClick,
   userRole,
-  onRoleChange,
   currentUser,
   notifications,
   onMarkNotificationsRead,
   darkMode,
   onToggleDarkMode,
-  onNavigate
+  onNavigate,
+  onSignOut
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showRoleMenu, setShowRoleMenu] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const roles: Array<'Admin' | 'Team Leader' | 'Team Member'> = [
-    'Admin',
-    'Team Leader',
-    'Team Member'
-  ];
-
-  const handleRoleSelect = (role: 'Admin' | 'Team Leader' | 'Team Member') => {
-    onRoleChange(role);
-    setShowRoleMenu(false);
-  };
 
   const handleNotificationClick = (notif: Notification) => {
     setShowNotifications(false);
@@ -99,44 +85,13 @@ export default function Header({
           <span className="opacity-50 text-[10px]">Ctrl + K</span>
         </button>
 
-        {/* Dynamic User Role Selector Button */}
-        <div className="relative">
-          <button
-            id="role-picker-button"
-            onClick={() => setShowRoleMenu(!showRoleMenu)}
-            className="flex items-center gap-1.5 rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/60 dark:bg-blue-950/20 px-3.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-100/60 dark:hover:bg-blue-950/40 transition-all duration-200"
-          >
-            <Users className="h-3.5 w-3.5" />
-            <span>Role: {userRole}</span>
-          </button>
-
-          {showRoleMenu && (
-            <div
-              id="role-menu-dropdown"
-              className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-1.5 shadow-xl ring-1 ring-black/5 z-30"
-            >
-              <div className="px-2.5 py-1.5 border-b border-gray-100 dark:border-gray-900 mb-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  Select Demo View
-                </span>
-              </div>
-              {roles.map((r) => (
-                <button
-                  key={r}
-                  id={`select-role-${r.replace(' ', '-').toLowerCase()}`}
-                  onClick={() => handleRoleSelect(r)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors ${
-                    userRole === r
-                      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                  }`}
-                >
-                  <span>{r} View</span>
-                  {userRole === r && <Check className="h-3.5 w-3.5 text-blue-500" />}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Current signed-in role (read-only — comes from who's logged in) */}
+        <div
+          id="current-role-badge"
+          className="flex items-center gap-1.5 rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/60 dark:bg-blue-950/20 px-3.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          <span>{userRole}</span>
         </div>
 
         {/* Dark Mode Toggle */}
@@ -241,6 +196,14 @@ export default function Header({
             className="h-9 w-9 rounded-full border border-gray-200 dark:border-gray-800 object-cover shadow-sm hover:opacity-90 cursor-pointer transition-opacity"
             onClick={() => onNavigate('Settings')}
           />
+          <button
+            id="sign-out-btn"
+            onClick={onSignOut}
+            title="Sign Out"
+            className="rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-red-500 p-2 transition-all duration-200 cursor-pointer"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </header>

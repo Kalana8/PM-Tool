@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   CheckSquare,
@@ -26,6 +26,8 @@ interface TeamLeaderDashboardProps {
   attendance: Attendance[];
   onApproveSubmission: (taskId: string, submissionId: string, feedback: string) => void;
   onRejectSubmission: (taskId: string, submissionId: string, feedback: string) => void;
+  onCheckIn: () => void;
+  onCheckOut: () => void;
   onNavigate: (view: string, id?: string) => void;
 }
 
@@ -37,10 +39,20 @@ export default function TeamLeaderDashboard({
   attendance,
   onApproveSubmission,
   onRejectSubmission,
+  onCheckIn,
+  onCheckOut,
   onNavigate
 }: TeamLeaderDashboardProps) {
   const [reviewingTask, setReviewingTask] = useState<{ taskId: string; submission: TaskSubmission } | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
+
+  const [currentTime, setCurrentTime] = useState<string>('');
+  useEffect(() => {
+    const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Find the Team Members directly supervised by this leader
   const teamMembers = users.filter((u) => u.teamLeaderId === currentUser.id);
@@ -66,6 +78,7 @@ export default function TeamLeaderDashboard({
 
   // Team attendance today (2026-07-07)
   const todayStr = '2026-07-07';
+  const myTodayAttendance = attendance.find((a) => a.userId === currentUser.id && a.date === todayStr);
   const teamAttendanceToday = teamMembers.map((member) => {
     const att = attendance.find((a) => a.userId === member.id && a.date === todayStr);
     return {
@@ -90,19 +103,67 @@ export default function TeamLeaderDashboard({
 
   return (
     <div className="space-y-8 animate-fadeIn" id="leader-dashboard-container">
-      {/* Welcome Block */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Leader Hub – {currentUser.departmentId === 'dept-webdev' ? 'Web Engineering' : 'Creative UI/UX'}
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Oversee your direct reports, approve daily deliverable packages, and manage department velocity.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-gray-50 dark:bg-gray-900/60 p-2 border border-gray-100 dark:border-gray-900 text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-          <Users className="h-4 w-4 text-blue-500" />
-          <span>Team Size: {teamMembers.length} headcount</span>
+      {/* Welcome / Workspace Profile Block */}
+      <div className="rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-gray-950 p-6 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-100/60 dark:bg-blue-950/40 px-2.5 py-1 rounded-full">
+              Workspace Profile
+            </span>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-3">
+              Leader Hub – {currentUser.departmentId === 'dept-webdev' ? 'Web Engineering' : 'Creative UI/UX'}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed max-w-xl">
+              Oversee your direct reports, approve daily deliverable packages, and manage department velocity.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl bg-white/70 dark:bg-gray-900/60 p-2 border border-gray-100 dark:border-gray-900 text-[11px] font-semibold text-gray-600 dark:text-gray-300 mt-3 w-fit">
+              <Users className="h-4 w-4 text-blue-500" />
+              <span>Team Size: {teamMembers.length} headcount</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 bg-white/80 dark:bg-gray-950/80 rounded-2xl border border-gray-100 dark:border-gray-900 p-4 shadow-sm backdrop-blur-sm self-start md:self-auto">
+            <div className="text-center sm:text-right">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Clock Ticker</p>
+              <p className="text-lg font-mono font-bold text-gray-900 dark:text-gray-100 tracking-tight mt-0.5">
+                {currentTime}
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center sm:items-end gap-1.5">
+              {myTodayAttendance && (
+                <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-bold border ${
+                  myTodayAttendance.checkOutTime
+                    ? 'bg-gray-100 text-gray-600 border-gray-200'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border-emerald-100 dark:border-emerald-900/30'
+                }`}>
+                  {myTodayAttendance.checkOutTime ? 'Logged Out' : 'Active Duty'}
+                </span>
+              )}
+              {myTodayAttendance && !myTodayAttendance.checkOutTime && (
+                <span className="text-[9px] text-gray-400 font-mono">
+                  Checked In: {myTodayAttendance.checkInTime.slice(0, 5)}
+                </span>
+              )}
+              {!myTodayAttendance || myTodayAttendance.checkOutTime ? (
+                <button
+                  id="signin-btn-banner"
+                  onClick={onCheckIn}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-blue-500/10 transition-colors"
+                >
+                  Sign In
+                </button>
+              ) : (
+                <button
+                  id="signout-btn-banner"
+                  onClick={onCheckOut}
+                  className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-rose-500/10 transition-colors"
+                >
+                  Sign Out
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

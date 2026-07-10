@@ -1,9 +1,41 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getStoredData, saveStoredData } from '../lib/initialData';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+import { fetchAllData, fetchCurrentProfile, AppData } from '../lib/supabase/mappers';
+import {
+  dbInsertDepartment,
+  dbUpdateDepartment,
+  dbDeleteDepartment,
+  dbInsertUser,
+  dbUpdateUser,
+  dbDeclineUser,
+  dbInsertProject,
+  dbUpdateProject,
+  dbDeleteProject,
+  dbInsertTask,
+  dbUpdateTask,
+  dbDeleteTask,
+  dbReorderTasks,
+  dbInsertSubtask,
+  dbUpdateSubtask,
+  dbDeleteSubtask,
+  dbReorderSubtasks,
+  dbInsertTaskComment,
+  dbInsertTaskSubmission,
+  dbUpdateTaskSubmission,
+  dbInsertMediaFile,
+  dbInsertAttendance,
+  dbUpdateAttendance,
+  dbInsertNotification,
+  dbMarkAllNotificationsRead,
+  dbInsertWorklog
+} from '../lib/supabase/mutations';
 import {
   User,
+  UserRole,
+  PendingUser,
   Department,
   Project,
   Task,
@@ -12,10 +44,12 @@ import {
   MediaFile,
   Notification,
   TaskStatus,
-  UserRole,
   TaskComment,
   Subtask
 } from '../lib/types';
+import { adminCreateUser, adminDeleteUser } from '../lib/supabase/adminApi';
+import LoginPage from '../components/LoginPage';
+import ResetPasswordPage from '../components/ResetPasswordPage';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import CommandPalette from '../components/CommandPalette';
@@ -29,37 +63,111 @@ import CalendarView from '../components/CalendarView';
 import ReportsView from '../components/ReportsView';
 import UsersView from '../components/UsersView';
 import FilesView from '../components/FilesView';
-import { Loader2, Settings, User as UserIcon, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
+
+function FullScreenMessage({
+  icon,
+  title,
+  subtitle,
+  action
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 text-gray-500">
+      <div className="text-center space-y-3">
+        {icon}
+        <p className="text-xs font-semibold tracking-wide">{title}</p>
+        {subtitle && <p className="text-[11px] text-gray-400 max-w-xs mx-auto">{subtitle}</p>}
+        {action}
+      </div>
+    </div>
+  );
+}
 
 export default function Page() {
-  const [data, setData] = useState<{
-    departments: Department[];
-    users: User[];
-    projects: Project[];
-    tasks: Task[];
-    attendance: Attendance[];
-    media: MediaFile[];
-    notifications: Notification[];
-    worklogs: DailyWorkLog[];
-  } | null>(null);
+  // Auth: `undefined` = still checking for an existing session, `null` = signed out
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [data, setData] = useState<AppData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
 
   // Layout states
   const [currentView, setCurrentView] = useState<string>('Dashboard');
-  const [userRole, setUserRole] = useState<UserRole>('Admin');
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Initialize data on mount
+  // Track the auth session
   useEffect(() => {
-    const stored = getStoredData();
-    setTimeout(() => {
-      setData(stored);
-    }, 0);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      setSession(initialSession);
+    });
 
-    // Keyboard listener for Ctrl + K command palette
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryMode(true);
+      }
+      if (!nextSession) {
+        setCurrentUser(null);
+        setData(null);
+        setLoadError(null);
+        setIsPendingApproval(false);
+        setIsRecoveryMode(false);
+      }
+    });
+
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  // Once signed in, load the profile row (for role/name/etc.) and the rest of the workspace data
+  useEffect(() => {
+    if (!session || isRecoveryMode) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const profile = await fetchCurrentProfile(session.user.id);
+        if (cancelled) return;
+        if (!profile) {
+          setLoadError(
+            'This account is signed in but is not linked to a workspace profile yet. Ask an admin to link your auth account to a users row.'
+          );
+          return;
+        }
+        if (!profile.role) {
+          // Signed up, but an admin hasn't categorized (assigned a role to) this account yet.
+          setCurrentUser(profile);
+          setIsPendingApproval(true);
+          return;
+        }
+        setCurrentUser(profile);
+
+        const appData = await fetchAllData();
+        if (cancelled) return;
+        setData(appData);
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Failed to load workspace data.');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, isRecoveryMode]);
+
+  // Keyboard listener for Ctrl + K command palette + initial theme detection (independent of auth)
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -68,54 +176,86 @@ export default function Page() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // Initial Theme detection
-    setTimeout(() => {
-      const isDark = localStorage.getItem('theme') === 'dark';
-      setDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }, 0);
+    const isDark = localStorage.getItem('theme') === 'dark';
+    setDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Save data to localStorage when state changes
-  const updateData = (newData: typeof data) => {
-    if (!newData) return;
+  const updateData = (newData: AppData) => {
     setData(newData);
-    saveStoredData(newData);
   };
 
-  if (!data) {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Gating: session check -> login -> data load -> app shell
+  // ---------------------------------------------------------------------------
+  if (session === undefined) {
+    return <FullScreenMessage icon={<Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />} title="Checking session..." />;
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  if (isRecoveryMode) {
+    return <ResetPasswordPage onDone={() => setIsRecoveryMode(false)} />;
+  }
+
+  if (loadError) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 text-gray-500">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-          <p className="text-xs font-semibold tracking-wide">Bootstrapping Enterprise Prototype...</p>
-        </div>
-      </div>
+      <FullScreenMessage
+        icon={<ShieldAlert className="h-8 w-8 text-red-500 mx-auto" />}
+        title="Couldn't load your workspace"
+        subtitle={loadError}
+      />
     );
   }
 
-  // Determine current active user based on role mapping
-  const activeUserMap: Record<UserRole, string> = {
-    Admin: 'user-admin',
-    'Team Leader': 'user-leader-web',
-    'Team Member': 'user-member-david'
-  };
-  const currentActiveUserId = activeUserMap[userRole];
-  const currentUser = data.users.find((u) => u.id === currentActiveUserId) || data.users[0];
+  if (isPendingApproval) {
+    return (
+      <FullScreenMessage
+        icon={<ShieldAlert className="h-8 w-8 text-amber-500 mx-auto" />}
+        title="Awaiting Admin Approval"
+        subtitle="Your account has been created. An administrator needs to assign your role and department before you can access the workspace."
+        action={
+          <button
+            id="pending-signout-btn"
+            onClick={handleSignOut}
+            className="mt-2 rounded-xl bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 px-4 py-2 text-xs font-semibold"
+          >
+            Sign Out
+          </button>
+        }
+      />
+    );
+  }
+
+  if (!currentUser || !data) {
+    return (
+      <FullScreenMessage
+        icon={<Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />}
+        title="Bootstrapping Enterprise Workspace..."
+      />
+    );
+  }
+
+  const userRole = currentUser.role;
 
   // Actions
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     const todayStr = '2026-07-07';
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
-    // Check if already checked in
     const existing = data.attendance.find((a) => a.userId === currentUser.id && a.date === todayStr);
     if (existing) {
       alert('You are already checked in for today.');
@@ -140,6 +280,14 @@ export default function Page() {
       read: false
     };
 
+    try {
+      await dbInsertAttendance(newRow);
+      await dbInsertNotification(newNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to check in.');
+      return;
+    }
+
     updateData({
       ...data,
       attendance: [...data.attendance, newRow],
@@ -147,26 +295,18 @@ export default function Page() {
     });
   };
 
-  const handleCheckOut = () => {
+  const handleCheckOut = async () => {
     const todayStr = '2026-07-07';
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
-    const updated = data.attendance.map((a) => {
-      if (a.userId === currentUser.id && a.date === todayStr && !a.checkOutTime) {
-        // Calculate working hours
-        const [inH, inM, inS] = a.checkInTime.split(':').map(Number);
-        const [outH, outM, outS] = timeStr.split(':').map(Number);
-        const diffHrs = outH - inH + (outM - inM) / 60 + (outS - inS) / 3600;
+    const target = data.attendance.find((a) => a.userId === currentUser.id && a.date === todayStr && !a.checkOutTime);
+    if (!target) return;
 
-        return {
-          ...a,
-          checkOutTime: timeStr,
-          workingHours: Math.max(diffHrs, 0.1)
-        };
-      }
-      return a;
-    });
+    const [inH, inM, inS] = target.checkInTime.split(':').map(Number);
+    const [outH, outM, outS] = timeStr.split(':').map(Number);
+    const diffHrs = outH - inH + (outM - inM) / 60 + (outS - inS) / 3600;
+    const workingHours = Math.max(diffHrs, 0.1);
 
     const newNotif: Notification = {
       id: `notif-new-${Date.now()}`,
@@ -178,6 +318,18 @@ export default function Page() {
       read: false
     };
 
+    try {
+      await dbUpdateAttendance(target.id, { checkOutTime: timeStr, workingHours });
+      await dbInsertNotification(newNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to check out.');
+      return;
+    }
+
+    const updated = data.attendance.map((a) =>
+      a.id === target.id ? { ...a, checkOutTime: timeStr, workingHours } : a
+    );
+
     updateData({
       ...data,
       attendance: updated,
@@ -185,7 +337,7 @@ export default function Page() {
     });
   };
 
-  const handleSubmitDailyLog = (log: Omit<DailyWorkLog, 'id' | 'userId' | 'userName' | 'date'>) => {
+  const handleSubmitDailyLog = async (log: Omit<DailyWorkLog, 'id' | 'userId' | 'userName' | 'date'>) => {
     const newLog: DailyWorkLog = {
       ...log,
       id: `log-new-${Date.now()}`,
@@ -194,91 +346,101 @@ export default function Page() {
       date: '2026-07-07'
     };
 
+    try {
+      await dbInsertWorklog(newLog);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit daily log.');
+      return;
+    }
+
     updateData({
       ...data,
       worklogs: [...data.worklogs, newLog]
     });
   };
 
-  const handleSubmitTaskWork = (taskId: string, workDone: string, notes: string, attachments: MediaFile[]) => {
-    // Add a submission row on task
-    const submission: typeof data.tasks[0]['submissions'][0] = {
+  const handleSubmitTaskWork = async (taskId: string, workDone: string, notes: string, attachments: MediaFile[]) => {
+    const task = data.tasks.find((t) => t.id === taskId);
+    const attachmentsWithProject = attachments.map((f) => ({ ...f, projectId: task?.projectId }));
+
+    const submission = {
       id: `sub-new-${Date.now()}`,
       userId: currentUser.id,
       userName: currentUser.name,
       date: '2026-07-07 18:00',
       workDone,
       notes,
-      status: 'Pending',
-      attachments
+      status: 'Pending' as const,
+      attachments: attachmentsWithProject
     };
 
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          status: 'Review' as TaskStatus,
-          submissions: [...t.submissions, submission]
-        };
-      }
-      return t;
-    });
-
-    // Notify leaders of department
     const leaderNotif: Notification = {
       id: `notif-new-${Date.now()}`,
-      userId: 'user-leader-web', // default leader
+      userId: 'user-leader-web',
       title: 'Work Deliverable Pushed',
-      message: `${currentUser.name} pushed deliverable code for review on: "${updatedTasks.find(t => t.id === taskId)?.name}"`,
+      message: `${currentUser.name} pushed deliverable code for review on: "${task?.name}"`,
       type: 'task_completed',
       time: 'Just now',
       read: false
     };
 
+    try {
+      for (const file of attachmentsWithProject) {
+        await dbInsertMediaFile(file);
+      }
+      await dbInsertTaskSubmission(taskId, submission);
+      await dbUpdateTask(taskId, { status: 'Review' });
+      await dbInsertNotification(leaderNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to submit task work.');
+      return;
+    }
+
+    const updatedTasks = data.tasks.map((t) =>
+      t.id === taskId ? { ...t, status: 'Review' as TaskStatus, submissions: [...t.submissions, submission] } : t
+    );
+
     updateData({
       ...data,
       tasks: updatedTasks,
       notifications: [leaderNotif, ...data.notifications],
-      media: [...data.media, ...attachments.map(f => ({ ...f, projectId: updatedTasks.find(t => t.id === taskId)?.projectId }))]
+      media: [...data.media, ...attachmentsWithProject]
     });
   };
 
-  const handleApproveSubmission = (taskId: string, submissionId: string, feedback: string) => {
-    let targetMemberId = '';
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        targetMemberId = t.assignedTo;
-        const updatedSubs = t.submissions.map((sub) => {
-          if (sub.id === submissionId) {
-            return {
-              ...sub,
-              status: 'Approved' as const,
-              feedback
-            };
-          }
-          return sub;
-        });
-
-        return {
-          ...t,
-          status: 'Completed' as TaskStatus,
-          progress: 100,
-          submissions: updatedSubs
-        };
-      }
-      return t;
-    });
+  const handleApproveSubmission = async (taskId: string, submissionId: string, feedback: string) => {
+    const task = data.tasks.find((t) => t.id === taskId);
+    if (!task) return;
 
     const userNotif: Notification = {
       id: `notif-new-${Date.now()}`,
-      userId: targetMemberId,
+      userId: task.assignedTo,
       title: 'Task Completion Approved!',
-      message: `Your supervisor approved completion of task: "${updatedTasks.find(t => t.id === taskId)?.name}"`,
+      message: `Your supervisor approved completion of task: "${task.name}"`,
       type: 'task_approved',
       time: 'Just now',
       read: false
     };
 
+    try {
+      await dbUpdateTaskSubmission(submissionId, { status: 'Approved', feedback });
+      await dbUpdateTask(taskId, { status: 'Completed', progress: 100 });
+      await dbInsertNotification(userNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to approve submission.');
+      return;
+    }
+
+    const updatedTasks = data.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        status: 'Completed' as TaskStatus,
+        progress: 100,
+        submissions: t.submissions.map((sub) => (sub.id === submissionId ? { ...sub, status: 'Approved' as const, feedback } : sub))
+      };
+    });
+
     updateData({
       ...data,
       tasks: updatedTasks,
@@ -286,52 +448,51 @@ export default function Page() {
     });
   };
 
-  const handleRejectSubmission = (taskId: string, submissionId: string, feedback: string) => {
-    let targetMemberId = '';
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        targetMemberId = t.assignedTo;
-        const updatedSubs = t.submissions.map((sub) => {
-          if (sub.id === submissionId) {
-            return {
-              ...sub,
-              status: 'Changes Requested' as const,
-              feedback
-            };
-          }
-          return sub;
-        });
+  const handleRejectSubmission = async (taskId: string, submissionId: string, feedback: string) => {
+    const task = data.tasks.find((t) => t.id === taskId);
+    if (!task) return;
 
-        // Add task comment automatically
-        const newComment: TaskComment = {
-          id: `c-new-${Date.now()}`,
-          userName: currentUser.name,
-          userAvatar: currentUser.avatar,
-          text: `Revision Requested: ${feedback}`,
-          timestamp: '2026-07-07 18:05'
-        };
-
-        return {
-          ...t,
-          status: 'In Progress' as TaskStatus,
-          progress: 50,
-          submissions: updatedSubs,
-          comments: [...t.comments, newComment]
-        };
-      }
-      return t;
-    });
+    const newComment: TaskComment = {
+      id: `c-new-${Date.now()}`,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      text: `Revision Requested: ${feedback}`,
+      timestamp: '2026-07-07 18:05'
+    };
 
     const userNotif: Notification = {
       id: `notif-new-${Date.now()}`,
-      userId: targetMemberId,
+      userId: task.assignedTo,
       title: 'Revision Iteration Requested',
-      message: `Your supervisor requested details on: "${updatedTasks.find(t => t.id === taskId)?.name}"`,
+      message: `Your supervisor requested details on: "${task.name}"`,
       type: 'task_rejected',
       time: 'Just now',
       read: false
     };
 
+    try {
+      await dbUpdateTaskSubmission(submissionId, { status: 'Changes Requested', feedback });
+      await dbUpdateTask(taskId, { status: 'In Progress', progress: 50 });
+      await dbInsertTaskComment(taskId, newComment);
+      await dbInsertNotification(userNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to request revision.');
+      return;
+    }
+
+    const updatedTasks = data.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        status: 'In Progress' as TaskStatus,
+        progress: 50,
+        submissions: t.submissions.map((sub) =>
+          sub.id === submissionId ? { ...sub, status: 'Changes Requested' as const, feedback } : sub
+        ),
+        comments: [...t.comments, newComment]
+      };
+    });
+
     updateData({
       ...data,
       tasks: updatedTasks,
@@ -339,7 +500,7 @@ export default function Page() {
     });
   };
 
-  const handleAddComment = (projectId: string, text: string) => {
+  const handleAddComment = async (projectId: string, text: string) => {
     const newComment: TaskComment = {
       id: `comment-new-${Date.now()}`,
       userName: currentUser.name,
@@ -348,16 +509,19 @@ export default function Page() {
       timestamp: 'Just now'
     };
 
-    // Find any active task in this project to place comment, or simply log it.
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.projectId === projectId) {
-        return {
-          ...t,
-          comments: [newComment, ...t.comments]
-        };
-      }
-      return t;
-    });
+    const targetTask = data.tasks.find((t) => t.projectId === projectId);
+    if (!targetTask) return;
+
+    try {
+      await dbInsertTaskComment(targetTask.id, newComment);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add comment.');
+      return;
+    }
+
+    const updatedTasks = data.tasks.map((t) =>
+      t.projectId === projectId ? { ...t, comments: [newComment, ...t.comments] } : t
+    );
 
     updateData({
       ...data,
@@ -365,7 +529,7 @@ export default function Page() {
     });
   };
 
-  const handleAddTask = (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => {
+  const handleAddTask = async (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => {
     const newTask: Task = {
       ...task,
       id: `task-new-${Date.now()}`,
@@ -383,6 +547,14 @@ export default function Page() {
       read: false
     };
 
+    try {
+      await dbInsertTask(newTask, data.tasks.length);
+      await dbInsertNotification(userNotif);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add task.');
+      return;
+    }
+
     updateData({
       ...data,
       tasks: [...data.tasks, newTask],
@@ -390,95 +562,116 @@ export default function Page() {
     });
   };
 
-  const handleUpdateTask = (taskId: string, updates: Partial<Omit<Task, 'id' | 'comments' | 'submissions'>>) => {
-    const updatedTasks = data.tasks.map((t) =>
-      t.id === taskId ? { ...t, ...updates } : t
-    );
+  const handleUpdateTask = async (taskId: string, updates: Partial<Omit<Task, 'id' | 'comments' | 'submissions'>>) => {
+    try {
+      await dbUpdateTask(taskId, updates);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update task.');
+      return;
+    }
 
     updateData({
       ...data,
-      tasks: updatedTasks
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
     });
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await dbDeleteTask(taskId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete task.');
+      return;
+    }
+
     updateData({
       ...data,
       tasks: data.tasks.filter((t) => t.id !== taskId)
     });
   };
 
-  const handleUpdateTaskStatus = (taskId: string, status: TaskStatus, progress: number) => {
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          status,
-          progress
-        };
-      }
-      return t;
-    });
+  const handleUpdateTaskStatus = async (taskId: string, status: TaskStatus, progress: number) => {
+    try {
+      await dbUpdateTask(taskId, { status, progress });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update task status.');
+      return;
+    }
 
     updateData({
       ...data,
-      tasks: updatedTasks
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, status, progress } : t))
     });
   };
 
-  const handleUpdateTaskAssignee = (taskId: string, assignedTo: string) => {
-    const updatedTasks = data.tasks.map((t) =>
-      t.id === taskId ? { ...t, assignedTo } : t
-    );
+  const handleUpdateTaskAssignee = async (taskId: string, assignedTo: string) => {
+    try {
+      await dbUpdateTask(taskId, { assignedTo });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reassign task.');
+      return;
+    }
 
     updateData({
       ...data,
-      tasks: updatedTasks
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, assignedTo } : t))
     });
   };
 
-  const handleAddSubtask = (taskId: string, subtask: Omit<Subtask, 'id' | 'status' | 'progress'>) => {
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        const newSubtask: Subtask = { id: `subtask-${Date.now()}`, status: 'Todo', progress: 0, ...subtask };
-        return { ...t, subtasks: [...(t.subtasks || []), newSubtask] };
-      }
-      return t;
-    });
+  const handleAddSubtask = async (taskId: string, subtask: Omit<Subtask, 'id' | 'status' | 'progress'>) => {
+    const task = data.tasks.find((t) => t.id === taskId);
+    const newSubtask: Subtask = { id: `subtask-${Date.now()}`, status: 'Todo', progress: 0, ...subtask };
 
-    updateData({ ...data, tasks: updatedTasks });
+    try {
+      await dbInsertSubtask(taskId, newSubtask, task?.subtasks?.length ?? 0);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add subtask.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] } : t))
+    });
   };
 
-  const handleUpdateSubtask = (taskId: string, subtaskId: string, updates: Partial<Omit<Subtask, 'id'>>) => {
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          subtasks: (t.subtasks || []).map((s) =>
-            s.id === subtaskId ? { ...s, ...updates } : s
-          )
-        };
-      }
-      return t;
-    });
+  const handleUpdateSubtask = async (taskId: string, subtaskId: string, updates: Partial<Omit<Subtask, 'id'>>) => {
+    try {
+      await dbUpdateSubtask(subtaskId, updates);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update subtask.');
+      return;
+    }
 
-    updateData({ ...data, tasks: updatedTasks });
+    updateData({
+      ...data,
+      tasks: data.tasks.map((t) =>
+        t.id === taskId
+          ? { ...t, subtasks: (t.subtasks || []).map((s) => (s.id === subtaskId ? { ...s, ...updates } : s)) }
+          : t
+      )
+    });
   };
 
-  const handleDeleteSubtask = (taskId: string, subtaskId: string) => {
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
-        return { ...t, subtasks: (t.subtasks || []).filter((s) => s.id !== subtaskId) };
-      }
-      return t;
-    });
+  const handleDeleteSubtask = async (taskId: string, subtaskId: string) => {
+    try {
+      await dbDeleteSubtask(subtaskId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete subtask.');
+      return;
+    }
 
-    updateData({ ...data, tasks: updatedTasks });
+    updateData({
+      ...data,
+      tasks: data.tasks.map((t) =>
+        t.id === taskId ? { ...t, subtasks: (t.subtasks || []).filter((s) => s.id !== subtaskId) } : t
+      )
+    });
   };
 
   // Reorders only the tasks named in orderedIds, keeping their relative
   // slot positions among the full task list (other tasks stay put).
-  const handleReorderTasks = (orderedIds: string[]) => {
+  const handleReorderTasks = async (orderedIds: string[]) => {
     const orderedIdSet = new Set(orderedIds);
     const slotIndices = data.tasks
       .map((t, index) => (orderedIdSet.has(t.id) ? index : -1))
@@ -490,27 +683,47 @@ export default function Page() {
       if (task) updatedTasks[slotIndex] = task;
     });
 
+    try {
+      await dbReorderTasks(updatedTasks.map((t) => t.id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reorder tasks.');
+      return;
+    }
+
     updateData({ ...data, tasks: updatedTasks });
   };
 
-  const handleReorderSubtasks = (taskId: string, orderedSubtaskIds: string[]) => {
-    const updatedTasks = data.tasks.map((t) => {
-      if (t.id === taskId) {
+  const handleReorderSubtasks = async (taskId: string, orderedSubtaskIds: string[]) => {
+    try {
+      await dbReorderSubtasks(orderedSubtaskIds);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reorder subtasks.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      tasks: data.tasks.map((t) => {
+        if (t.id !== taskId) return t;
         const subtaskById = new Map((t.subtasks || []).map((s) => [s.id, s]));
         return { ...t, subtasks: orderedSubtaskIds.map((id) => subtaskById.get(id)!).filter(Boolean) };
-      }
-      return t;
+      })
     });
-
-    updateData({ ...data, tasks: updatedTasks });
   };
 
-  const handleAddUser = (user: Omit<User, 'id' | 'performanceScore'>) => {
+  const handleAddUser = async (user: Omit<User, 'id' | 'performanceScore'>) => {
     const newUser: User = {
       ...user,
       id: `user-new-${Date.now()}`,
       performanceScore: 85
     };
+
+    try {
+      await dbInsertUser(newUser);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add employee.');
+      return;
+    }
 
     updateData({
       ...data,
@@ -518,33 +731,172 @@ export default function Page() {
     });
   };
 
-  const handleToggleUserStatus = (userId: string) => {
-    const updatedUsers = data.users.map((u) => {
-      if (u.id === userId) {
-        return {
-          ...u,
-          status: u.status === 'Active' ? ('Inactive' as const) : ('Active' as const)
-        };
-      }
-      return u;
-    });
+  const handleAddUserWithPassword = async (user: Omit<User, 'id' | 'performanceScore'>, password: string) => {
+    const newUser: User = {
+      ...user,
+      id: `user-new-${Date.now()}`,
+      performanceScore: 85
+    };
+
+    let createdUser: User;
+    try {
+      createdUser = await adminCreateUser(newUser, password);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create employee login.');
+      return;
+    }
 
     updateData({
       ...data,
-      users: updatedUsers
+      users: [...data.users, createdUser]
     });
   };
 
-  const handleResetPassword = (userId: string) => {
-    const user = data.users.find((u) => u.id === userId);
-    alert(`Reset security credentials sent successfully to: ${user?.email}`);
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await adminDeleteUser(userId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete this account.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      users: data.users.filter((u) => u.id !== userId)
+    });
   };
 
-  const handleAddDepartment = (dept: Omit<Department, 'id'>) => {
+  const handleToggleUserStatus = async (userId: string) => {
+    const target = data.users.find((u) => u.id === userId);
+    if (!target) return;
+    const nextStatus = target.status === 'Active' ? ('Inactive' as const) : ('Active' as const);
+
+    try {
+      await dbUpdateUser(userId, { status: nextStatus });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update employee status.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      users: data.users.map((u) => (u.id === userId ? { ...u, status: nextStatus } : u))
+    });
+  };
+
+  const handleCategorizeUser = async (
+    pendingUserId: string,
+    updates: { role: UserRole; departmentId: string; title: string; teamLeaderId?: string }
+  ) => {
+    try {
+      await dbUpdateUser(pendingUserId, {
+        role: updates.role,
+        departmentId: updates.departmentId,
+        title: updates.title,
+        teamLeaderId: updates.teamLeaderId,
+        status: 'Active'
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to categorize this account.');
+      return;
+    }
+
+    const pending = data.pendingUsers.find((p) => p.id === pendingUserId);
+    if (!pending) return;
+
+    const newUser: User = {
+      id: pending.id,
+      name: pending.name,
+      email: pending.email,
+      role: updates.role,
+      departmentId: updates.departmentId,
+      status: 'Active',
+      avatar: pending.avatar,
+      title: updates.title,
+      performanceScore: 0,
+      teamLeaderId: updates.teamLeaderId
+    };
+
+    updateData({
+      ...data,
+      users: [...data.users, newUser],
+      pendingUsers: data.pendingUsers.filter((p) => p.id !== pendingUserId)
+    });
+  };
+
+  const handleDeclineUser = async (pendingUserId: string) => {
+    try {
+      await dbDeclineUser(pendingUserId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to decline this account.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      pendingUsers: data.pendingUsers.filter((p) => p.id !== pendingUserId)
+    });
+  };
+
+  const handleEditUser = async (
+    userId: string,
+    updates: { name: string; title: string; role: UserRole; departmentId: string; teamLeaderId?: string }
+  ) => {
+    try {
+      await dbUpdateUser(userId, {
+        name: updates.name,
+        title: updates.title,
+        role: updates.role,
+        departmentId: updates.departmentId,
+        teamLeaderId: updates.role === 'Team Member' ? updates.teamLeaderId : ''
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update this account.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      users: data.users.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              name: updates.name,
+              title: updates.title,
+              role: updates.role,
+              departmentId: updates.departmentId,
+              teamLeaderId: updates.role === 'Team Member' ? updates.teamLeaderId : undefined
+            }
+          : u
+      )
+    });
+  };
+
+  const handleSendPasswordReset = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+      if (error) throw error;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to send password reset email.');
+      return;
+    }
+    alert(`Password reset email sent to: ${email}`);
+  };
+
+  const handleAddDepartment = async (dept: Omit<Department, 'id'>) => {
     const newDept: Department = {
       ...dept,
       id: `dept-new-${Date.now()}`
     };
+
+    try {
+      await dbInsertDepartment(newDept);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add department.');
+      return;
+    }
 
     updateData({
       ...data,
@@ -552,36 +904,51 @@ export default function Page() {
     });
   };
 
-  const handleUpdateDepartment = (deptId: string, updates: Omit<Department, 'id'>) => {
-    const updatedDepartments = data.departments.map((d) =>
-      d.id === deptId ? { ...d, ...updates } : d
-    );
+  const handleUpdateDepartment = async (deptId: string, updates: Omit<Department, 'id'>) => {
+    try {
+      await dbUpdateDepartment(deptId, updates);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update department.');
+      return;
+    }
 
     updateData({
       ...data,
-      departments: updatedDepartments
+      departments: data.departments.map((d) => (d.id === deptId ? { ...d, ...updates } : d))
     });
   };
 
-  const handleUpdateDepartmentStatus = (deptId: string, status: 'Active' | 'Inactive') => {
-    const updatedDepartments = data.departments.map((d) =>
-      d.id === deptId ? { ...d, status } : d
-    );
+  const handleUpdateDepartmentStatus = async (deptId: string, status: 'Active' | 'Inactive') => {
+    try {
+      await dbUpdateDepartment(deptId, { status });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update department status.');
+      return;
+    }
 
     updateData({
       ...data,
-      departments: updatedDepartments
+      departments: data.departments.map((d) => (d.id === deptId ? { ...d, status } : d))
     });
   };
 
-  const handleDeleteDepartment = (deptId: string) => {
+  const handleDeleteDepartment = async (deptId: string) => {
+    try {
+      await dbDeleteDepartment(deptId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete department.');
+      return;
+    }
+
     updateData({
       ...data,
       departments: data.departments.filter((d) => d.id !== deptId)
     });
   };
 
-  const handleAddProject = (project: Omit<Project, 'id' | 'progress' | 'members' | 'documents' | 'images' | 'videos' | 'notes'>) => {
+  const handleAddProject = async (
+    project: Omit<Project, 'id' | 'progress' | 'members' | 'documents' | 'images' | 'videos' | 'notes'>
+  ) => {
     const newProject: Project = {
       ...project,
       id: `proj-new-${Date.now()}`,
@@ -593,24 +960,41 @@ export default function Page() {
       notes: []
     };
 
+    try {
+      await dbInsertProject(newProject);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add project.');
+      return;
+    }
+
     updateData({
       ...data,
       projects: [...data.projects, newProject]
     });
   };
 
-  const handleUpdateProject = (projectId: string, updates: Partial<Omit<Project, 'id'>>) => {
-    const updatedProjects = data.projects.map((p) =>
-      p.id === projectId ? { ...p, ...updates } : p
-    );
+  const handleUpdateProject = async (projectId: string, updates: Partial<Omit<Project, 'id'>>) => {
+    try {
+      await dbUpdateProject(projectId, updates);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update project.');
+      return;
+    }
 
     updateData({
       ...data,
-      projects: updatedProjects
+      projects: data.projects.map((p) => (p.id === projectId ? { ...p, ...updates } : p))
     });
   };
 
-  const handleDeleteProject = (projectId: string) => {
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await dbDeleteProject(projectId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete project.');
+      return;
+    }
+
     updateData({
       ...data,
       projects: data.projects.filter((p) => p.id !== projectId)
@@ -625,12 +1009,19 @@ export default function Page() {
     handleUpdateProject(projectId, { assigneeId });
   };
 
-  const handleAddMedia = (file: Omit<MediaFile, 'id' | 'dateAdded'>) => {
+  const handleAddMedia = async (file: Omit<MediaFile, 'id' | 'dateAdded'>) => {
     const newFile: MediaFile = {
       ...file,
       id: `media-new-${Date.now()}`,
       dateAdded: '2026-07-07'
     };
+
+    try {
+      await dbInsertMediaFile(newFile);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload media.');
+      return;
+    }
 
     updateData({
       ...data,
@@ -638,11 +1029,19 @@ export default function Page() {
     });
   };
 
-  const handleMarkNotificationsRead = () => {
-    const updated = data.notifications.map((n) => ({ ...n, read: true }));
+  const handleMarkNotificationsRead = async () => {
+    const unreadIds = data.notifications.filter((n) => !n.read).map((n) => n.id);
+
+    try {
+      await dbMarkAllNotificationsRead(unreadIds);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to mark notifications as read.');
+      return;
+    }
+
     updateData({
       ...data,
-      notifications: updated
+      notifications: data.notifications.map((n) => ({ ...n, read: true }))
     });
   };
 
@@ -700,7 +1099,7 @@ export default function Page() {
       )
     : data.tasks;
 
-  // Filter attendance: strictly David's check-ins
+  // Filter attendance: strictly the current user's check-ins
   const visibleAttendance = isTeamMember
     ? data.attendance.filter((a) => a.userId === currentUser.id)
     : data.attendance;
@@ -751,13 +1150,13 @@ export default function Page() {
           selectedProjectName={visibleProjects.find((p) => p.id === selectedProjectId)?.name}
           onSearchClick={() => setIsCommandPaletteOpen(true)}
           userRole={userRole}
-          onRoleChange={setUserRole}
           currentUser={currentUser}
           notifications={data.notifications.filter((n) => n.userId === 'all' || n.userId === currentUser.id)}
           onMarkNotificationsRead={handleMarkNotificationsRead}
           darkMode={darkMode}
           onToggleDarkMode={handleToggleDarkMode}
           onNavigate={handleSearchNavigate}
+          onSignOut={handleSignOut}
         />
 
         {/* View Sheets */}
@@ -771,6 +1170,7 @@ export default function Page() {
                   tasks={visibleTasks}
                   attendance={visibleAttendance}
                   departments={visibleDepartments}
+                  pendingUserCount={data.pendingUsers.length}
                   onNavigate={handleSearchNavigate}
                 />
               )}
@@ -783,6 +1183,8 @@ export default function Page() {
                   attendance={visibleAttendance}
                   onApproveSubmission={handleApproveSubmission}
                   onRejectSubmission={handleRejectSubmission}
+                  onCheckIn={handleCheckIn}
+                  onCheckOut={handleCheckOut}
                   onNavigate={handleSearchNavigate}
                 />
               )}
@@ -822,6 +1224,17 @@ export default function Page() {
               onAddProject={handleAddProject}
               onUpdateProject={handleUpdateProject}
               onDeleteProject={handleDeleteProject}
+              onAddTask={handleAddTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              onUpdateTaskStatus={handleUpdateTaskStatus}
+              onUpdateTaskAssignee={handleUpdateTaskAssignee}
+              onAddSubtask={handleAddSubtask}
+              onUpdateSubtask={handleUpdateSubtask}
+              onDeleteSubtask={handleDeleteSubtask}
+              onReorderTasks={handleReorderTasks}
+              onReorderSubtasks={handleReorderSubtasks}
+              onAddComment={handleAddComment}
             />
           )}
 
@@ -948,7 +1361,13 @@ export default function Page() {
               currentUserId={currentUser.id}
               onAddUser={handleAddUser}
               onToggleUserStatus={handleToggleUserStatus}
-              onResetPassword={handleResetPassword}
+              pendingUsers={data.pendingUsers}
+              onCategorizeUser={handleCategorizeUser}
+              onDeclineUser={handleDeclineUser}
+              onEditUser={handleEditUser}
+              onSendPasswordReset={handleSendPasswordReset}
+              onAddUserWithPassword={handleAddUserWithPassword}
+              onDeleteUser={handleDeleteUser}
             />
           )}
 

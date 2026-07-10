@@ -1,5 +1,15 @@
 export type UserRole = 'Admin' | 'Team Leader' | 'Team Member';
 
+// A signup that hasn't been categorized (role assigned) by an admin yet.
+export interface PendingUser {
+  id: string;
+  authId: string;
+  name: string;
+  email: string;
+  avatar: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   name: string;

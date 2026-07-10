@@ -45,6 +45,17 @@ interface DepartmentsViewProps {
   onAddProject: (project: Omit<Project, 'id' | 'progress' | 'members' | 'documents' | 'images' | 'videos' | 'notes'>) => void;
   onUpdateProject: (projectId: string, updates: Partial<Omit<Project, 'id'>>) => void;
   onDeleteProject: (projectId: string) => void;
+  onAddTask: (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => void;
+  onUpdateTask: (taskId: string, updates: Partial<Omit<Task, 'id' | 'comments' | 'submissions'>>) => void;
+  onDeleteTask: (taskId: string) => void;
+  onUpdateTaskStatus: (taskId: string, status: TaskStatus, progress: number) => void;
+  onUpdateTaskAssignee: (taskId: string, assignedTo: string) => void;
+  onAddSubtask: (taskId: string, subtask: Omit<Subtask, 'id' | 'status' | 'progress'>) => void;
+  onUpdateSubtask: (taskId: string, subtaskId: string, updates: Partial<Omit<Subtask, 'id'>>) => void;
+  onDeleteSubtask: (taskId: string, subtaskId: string) => void;
+  onReorderTasks: (orderedTaskIds: string[]) => void;
+  onReorderSubtasks: (taskId: string, orderedSubtaskIds: string[]) => void;
+  onAddComment: (projectId: string, text: string) => void;
 }
 
 type TabType = 'Tasks' | 'Comments' | 'ChartView';
@@ -70,7 +81,7 @@ export default function DepartmentsView({
   admins,
   projects,
   media,
-  tasks: initialTasks,
+  tasks,
   selectedDeptId,
   onDeptSelect,
   onNavigate,
@@ -82,7 +93,18 @@ export default function DepartmentsView({
   currentUserId,
   onAddProject,
   onUpdateProject,
-  onDeleteProject
+  onDeleteProject,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  onUpdateTaskStatus,
+  onUpdateTaskAssignee,
+  onAddSubtask,
+  onUpdateSubtask,
+  onDeleteSubtask,
+  onReorderTasks,
+  onReorderSubtasks,
+  onAddComment
 }: DepartmentsViewProps) {
   // Navigation states
   const [activeDeptDetail, setActiveDeptDetail] = useState<string | null>(selectedDeptId);
@@ -227,8 +249,6 @@ export default function DepartmentsView({
   const [showUpgradeLimit, setShowUpgradeLimit] = useState(true);
 
   // Local interactive states to allow instant additions and checklist actions
-  const [localTasks, setLocalTasks] = useState<Task[]>(initialTasks);
-  const [localProjects, setLocalProjects] = useState<Project[]>(projects);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskOwner, setNewTaskOwner] = useState('Unassigned');
@@ -243,18 +263,6 @@ export default function DepartmentsView({
   const [newCommentText, setNewCommentText] = useState('');
 
   // Synchronize local state with props during render to avoid useEffect set-state rule
-  const [prevInitialTasks, setPrevInitialTasks] = useState<Task[]>(initialTasks);
-  if (initialTasks !== prevInitialTasks) {
-    setLocalTasks(initialTasks);
-    setPrevInitialTasks(initialTasks);
-  }
-
-  const [prevProjects, setPrevProjects] = useState<Project[]>(projects);
-  if (projects !== prevProjects) {
-    setLocalProjects(projects);
-    setPrevProjects(projects);
-  }
-
   const [prevSelectedDeptId, setPrevSelectedDeptId] = useState<string | null>(selectedDeptId);
   if (selectedDeptId !== prevSelectedDeptId) {
     setActiveDeptDetail(selectedDeptId);
@@ -283,26 +291,22 @@ export default function DepartmentsView({
 
   const canEditProgress = userRole === 'Admin' || userRole === 'Team Leader';
 
-  // Change a local task's status via dropdown (progress is left untouched, no auto-fill)
+  // Change a task's status via dropdown (progress is left untouched, no auto-fill)
   const handleTaskStatusChange = (taskId: string, nextStatus: TaskStatus) => {
-    setLocalTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: nextStatus } : t))
-    );
+    const task = tasks.find((t) => t.id === taskId);
+    onUpdateTaskStatus(taskId, nextStatus, task?.progress ?? 0);
   };
 
-  // Reassign a local task's assignee via dropdown
+  // Reassign a task's assignee via dropdown
   const handleTaskAssigneeChange = (taskId: string, nextAssignedTo: string) => {
-    setLocalTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, assignedTo: nextAssignedTo } : t))
-    );
+    onUpdateTaskAssignee(taskId, nextAssignedTo);
   };
 
   // Directly type a task's progress percentage
   const handleTaskProgressChange = (taskId: string, nextProgress: number) => {
     const clamped = Math.max(0, Math.min(100, nextProgress));
-    setLocalTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, progress: clamped } : t))
-    );
+    const task = tasks.find((t) => t.id === taskId);
+    onUpdateTaskStatus(taskId, task?.status ?? 'Todo', clamped);
   };
 
   // Subtasks: expand/collapse + inline "new subtask" draft per task
@@ -338,69 +342,23 @@ export default function DepartmentsView({
     const draft = getSubtaskDraft(taskId);
     const text = draft.name.trim();
     if (!text) return;
-    const newSubtask: Subtask = {
-      id: `subtask-${Date.now()}`,
+    onAddSubtask(taskId, {
       name: text,
-      status: 'Todo',
-      progress: 0,
       ownerId: draft.ownerId || undefined,
       assignedTo: draft.assignedTo || undefined,
       startDate: draft.startDate || undefined,
       dueDate: draft.dueDate || undefined,
       priority: draft.priority
-    };
-    setLocalTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] } : t
-      )
-    );
+    });
     setNewSubtaskDrafts((prev) => ({ ...prev, [taskId]: EMPTY_SUBTASK_DRAFT }));
   };
 
   const handleUpdateSubtask = (taskId: string, subtaskId: string, updates: Partial<Omit<Subtask, 'id'>>) => {
-    setLocalTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? { ...t, subtasks: (t.subtasks || []).map((s) => (s.id === subtaskId ? { ...s, ...updates } : s)) }
-          : t
-      )
-    );
+    onUpdateSubtask(taskId, subtaskId, updates);
   };
 
   const handleDeleteSubtask = (taskId: string, subtaskId: string) => {
-    setLocalTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, subtasks: (t.subtasks || []).filter((s) => s.id !== subtaskId) } : t
-      )
-    );
-  };
-
-  // Reorders only the tasks named in orderedIds, keeping their relative
-  // slot positions among the full local task list (other tasks stay put).
-  const handleReorderTasks = (orderedIds: string[]) => {
-    setLocalTasks((prev) => {
-      const orderedIdSet = new Set(orderedIds);
-      const slotIndices = prev
-        .map((t, index) => (orderedIdSet.has(t.id) ? index : -1))
-        .filter((index) => index !== -1);
-
-      const updated = [...prev];
-      slotIndices.forEach((slotIndex, i) => {
-        const task = prev.find((t) => t.id === orderedIds[i]);
-        if (task) updated[slotIndex] = task;
-      });
-      return updated;
-    });
-  };
-
-  const handleReorderSubtasks = (taskId: string, orderedSubtaskIds: string[]) => {
-    setLocalTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== taskId) return t;
-        const subtaskById = new Map((t.subtasks || []).map((s) => [s.id, s]));
-        return { ...t, subtasks: orderedSubtaskIds.map((id) => subtaskById.get(id)).filter((s): s is NonNullable<typeof s> => Boolean(s)) };
-      })
-    );
+    onDeleteSubtask(taskId, subtaskId);
   };
 
   const handleTaskDrop = (visibleTaskIds: string[], targetTaskId: string) => {
@@ -415,7 +373,7 @@ export default function DepartmentsView({
     const reordered = [...visibleTaskIds];
     reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, draggedTaskId);
-    handleReorderTasks(reordered);
+    onReorderTasks(reordered);
     setDraggedTaskId(null);
     setDragOverTaskId(null);
   };
@@ -433,12 +391,12 @@ export default function DepartmentsView({
     const reordered = [...ids];
     reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, draggedSubtask.subtaskId);
-    handleReorderSubtasks(taskId, reordered);
+    onReorderSubtasks(taskId, reordered);
     setDraggedSubtask(null);
     setDragOverSubtaskId(null);
   };
 
-  // Add a task locally to the selected project
+  // Add or update a task in the selected project
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskName.trim() || !selectedProjectId || !activeDeptDetail) return;
@@ -446,23 +404,16 @@ export default function DepartmentsView({
     const assignedUser = users.find((u) => u.id === newTaskOwner) || null;
 
     if (editingTaskId) {
-      const original = localTasks.find((t) => t.id === editingTaskId);
-      setLocalTasks((prev) =>
-        prev.map((t) =>
-          t.id === editingTaskId
-            ? {
-                ...t,
-                name: newTaskName,
-                startDate: newTaskStartDate,
-                startTime: newTaskStartTime,
-                dueDate: newTaskDueDate,
-                dueTime: newTaskDueTime,
-                dueDays: newTaskDueDays,
-                assignedTo: assignedUser ? assignedUser.id : t.assignedTo
-              }
-            : t
-        )
-      );
+      const original = tasks.find((t) => t.id === editingTaskId);
+      onUpdateTask(editingTaskId, {
+        name: newTaskName,
+        startDate: newTaskStartDate,
+        startTime: newTaskStartTime,
+        dueDate: newTaskDueDate,
+        dueTime: newTaskDueTime,
+        dueDays: newTaskDueDays,
+        assignedTo: assignedUser ? assignedUser.id : original?.assignedTo
+      });
       const notifiedUser = assignedUser || users.find((u) => u.id === original?.assignedTo);
       if (notifiedUser) {
         alert(`Email notification sent to ${notifiedUser.name} (${notifiedUser.email}) about task: "${newTaskName}"`);
@@ -472,8 +423,7 @@ export default function DepartmentsView({
       return;
     }
 
-    const newTask: Task = {
-      id: `TA-${100 + Math.floor(Math.random() * 900)}`,
+    onAddTask({
       name: newTaskName,
       projectId: selectedProjectId,
       departmentId: activeDeptDetail,
@@ -487,12 +437,8 @@ export default function DepartmentsView({
       dueDate: newTaskDueDate,
       dueTime: newTaskDueTime,
       dueDays: newTaskDueDays,
-      assignedTo: assignedUser ? assignedUser.id : 'unassigned',
-      comments: [],
-      submissions: []
-    };
-
-    setLocalTasks((prev) => [newTask, ...prev]);
+      assignedTo: assignedUser ? assignedUser.id : 'unassigned'
+    });
     if (assignedUser) {
       alert(`Email notification sent to ${assignedUser.name} (${assignedUser.email}) about task: "${newTaskName}"`);
     }
@@ -518,7 +464,7 @@ export default function DepartmentsView({
 
   const handleDeleteTaskLocal = (task: Task) => {
     if (window.confirm(`Delete task "${task.name}"? This cannot be undone.`)) {
-      setLocalTasks((prev) => prev.filter((t) => t.id !== task.id));
+      onDeleteTask(task.id);
     }
   };
 
@@ -529,40 +475,11 @@ export default function DepartmentsView({
     }
   };
 
-  // Post comment to selected project/task console
+  // Post comment to selected project console
   const handleAddComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim() || !selectedProjectId) return;
-
-    // Use a default user or the first team leader for mock presentation
-    const defaultAuthor = users.find((u) => u.role === 'Team Leader') || users[0] || {
-      name: 'Alex Reynolds',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'
-    };
-
-    const newComment: TaskComment = {
-      id: `c-new-${Date.now()}`,
-      userName: defaultAuthor.name,
-      userAvatar: defaultAuthor.avatar,
-      text: newCommentText,
-      timestamp: 'Just now'
-    };
-
-    // Update locally
-    const targetProjTasks = localTasks.filter((t) => t.projectId === selectedProjectId);
-    if (targetProjTasks.length > 0) {
-      setLocalTasks((prev) =>
-        prev.map((t) => {
-          if (t.projectId === selectedProjectId && t.id === targetProjTasks[0].id) {
-            return {
-              ...t,
-              comments: [...t.comments, newComment]
-            };
-          }
-          return t;
-        })
-      );
-    }
+    onAddComment(selectedProjectId, newCommentText);
     setNewCommentText('');
   };
 
@@ -576,7 +493,7 @@ export default function DepartmentsView({
 
   // Stats calculation for departments
   const getDeptStats = (deptId: string) => {
-    const deptTasks = localTasks.filter((t) => t.departmentId === deptId);
+    const deptTasks = tasks.filter((t) => t.departmentId === deptId);
     const total = deptTasks.length;
     const completed = deptTasks.filter((t) => t.status === 'Completed').length;
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -591,12 +508,12 @@ export default function DepartmentsView({
   // (no project chosen yet) or the project task detail split view (project chosen)
   if (activeDeptDetail) {
     const currentDept = departments.find((d) => d.id === activeDeptDetail) || departments[0];
-    const deptProjects = localProjects.filter((p) => p.departmentId === activeDeptDetail);
+    const deptProjects = projects.filter((p) => p.departmentId === activeDeptDetail);
     const activeProject = deptProjects.find((p) => p.id === selectedProjectId) || null;
 
     // Filter tasks for the selected project
     const projectTasks = activeProject
-      ? localTasks.filter((t) => t.projectId === activeProject.id)
+      ? tasks.filter((t) => t.projectId === activeProject.id)
       : [];
 
     const totalProjTasks = projectTasks.length;
@@ -612,7 +529,7 @@ export default function DepartmentsView({
       return acc;
     }, []);
 
-    const viewingTask = localTasks.find((t) => t.id === viewingTaskId) || null;
+    const viewingTask = tasks.find((t) => t.id === viewingTaskId) || null;
 
     return (
       <div className="flex flex-col h-[calc(100vh-80px)]" id="departments-split-view">
@@ -1807,7 +1724,7 @@ export default function DepartmentsView({
           <tbody className="divide-y divide-slate-150 dark:divide-slate-850">
             {filteredDepartments.map((dept, idx) => {
               const stats = getDeptStats(dept.id);
-              const deptProjects = localProjects.filter((p) => p.departmentId === dept.id);
+              const deptProjects = projects.filter((p) => p.departmentId === dept.id);
 
               const borderAccents = [
                 'border-l-3 border-amber-500',

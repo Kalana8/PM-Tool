@@ -23,6 +23,7 @@ interface AdminDashboardProps {
   tasks: Task[];
   attendance: Attendance[];
   departments: Department[];
+  pendingUserCount?: number;
   onNavigate: (view: string, id?: string) => void;
 }
 
@@ -32,6 +33,7 @@ export default function AdminDashboard({
   tasks,
   attendance,
   departments,
+  pendingUserCount = 0,
   onNavigate
 }: AdminDashboardProps) {
   const [selectedChartTab, setSelectedChartTab] = useState<'attendance' | 'tasks'>('attendance');
@@ -221,6 +223,26 @@ export default function AdminDashboard({
           </span>
         </div>
       </div>
+
+      {/* Pending Approvals banner */}
+      {pendingUserCount > 0 && (
+        <button
+          id="pending-approvals-banner"
+          onClick={() => onNavigate('Users')}
+          className="w-full flex items-center justify-between rounded-2xl border border-amber-100 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-5 py-3.5 text-left hover:bg-amber-100/60 dark:hover:bg-amber-950/30 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Clock className="h-4 w-4 text-amber-600" />
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+              {pendingUserCount} pending approval{pendingUserCount === 1 ? '' : 's'}
+            </span>
+            <span className="text-[11px] text-amber-600/80 dark:text-amber-500/70">
+              New signups need a role and department assigned.
+            </span>
+          </div>
+          <ArrowUpRight className="h-4 w-4 text-amber-600" />
+        </button>
+      )}
 
       {/* Grid: Main KPI Cards */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

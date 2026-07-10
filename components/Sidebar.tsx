@@ -13,7 +13,6 @@ import {
   Settings,
   Bell,
   Clock,
-  ShieldAlert,
   Terminal,
   PanelLeftClose,
   PanelLeftOpen
@@ -198,23 +197,6 @@ export default function Sidebar({
           </div>
         )}
       </div>
-
-      {/* Sidebar Footer */}
-      {!collapsed && (
-        <div className="border-t border-gray-100 dark:border-gray-900 bg-gray-50/50 dark:bg-gray-900/10 p-4">
-          <div className="rounded-xl border border-blue-100 dark:border-blue-950/40 bg-blue-50/40 dark:bg-blue-950/10 p-3">
-            <div className="flex gap-2">
-              <ShieldAlert className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[10px] font-semibold text-blue-900 dark:text-blue-300">Prototype Environment</p>
-                <p className="text-[9px] text-blue-700/80 dark:text-blue-400/70 mt-0.5 leading-normal">
-                  Easily toggle user roles in the top navbar to explore all workflows instantly.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

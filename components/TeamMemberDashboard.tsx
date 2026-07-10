@@ -157,8 +157,8 @@ export default function TeamMemberDashboard({
                 {currentTime}
               </p>
             </div>
-            {todayAttendance ? (
-              <div className="flex flex-col items-center sm:items-end">
+            <div className="flex flex-col items-center sm:items-end gap-1.5">
+              {todayAttendance && (
                 <span className={`inline-flex rounded-full px-2.5 py-1 text-[9px] font-bold border ${
                   todayAttendance.checkOutTime
                     ? 'bg-gray-100 text-gray-600 border-gray-200'
@@ -166,19 +166,30 @@ export default function TeamMemberDashboard({
                 }`}>
                   {todayAttendance.checkOutTime ? 'Logged Out' : 'Active Duty'}
                 </span>
-                <span className="text-[9px] text-gray-400 mt-1 font-mono">
+              )}
+              {todayAttendance && !todayAttendance.checkOutTime && (
+                <span className="text-[9px] text-gray-400 font-mono">
                   Checked In: {todayAttendance.checkInTime.slice(0, 5)}
                 </span>
-              </div>
-            ) : (
-              <button
-                id="checkin-btn-banner"
-                onClick={onCheckIn}
-                className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-blue-500/10 transition-colors"
-              >
-                In-Check
-              </button>
-            )}
+              )}
+              {!todayAttendance || todayAttendance.checkOutTime ? (
+                <button
+                  id="signin-btn-banner"
+                  onClick={onCheckIn}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-blue-500/10 transition-colors"
+                >
+                  Sign In
+                </button>
+              ) : (
+                <button
+                  id="signout-btn-banner"
+                  onClick={onCheckOut}
+                  className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 text-xs font-bold shadow-md shadow-rose-500/10 transition-colors"
+                >
+                  Sign Out
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
