@@ -1,0 +1,5 @@
+-- Test data reference (already applied on the shared dev database by the lead).
+-- Test users:
+--   dev@test.com   / password123  → owner of "Test Business One"
+--   other@test.com / password123  → owner of "Test Business Two" (for RLS isolation tests)
+-- If the database is ever reset, the lead re-runs the platform migrations + recreates these.
