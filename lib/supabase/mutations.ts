@@ -4,6 +4,7 @@
 // app/page.tsx still own local state — they call these, then patch `data`
 // themselves so the UI updates immediately without a full refetch.
 import { supabase } from '../supabaseClient';
+import { CURRENT_BUSINESS_ID } from '../constants';
 import type {
   Department,
   User,
@@ -28,6 +29,7 @@ const check = (error: { message: string } | null) => {
 export async function dbInsertDepartment(dept: Department) {
   const { error } = await supabase.from('departments').insert({
     id: dept.id,
+    business_id: CURRENT_BUSINESS_ID,
     name: dept.name,
     icon: dept.icon,
     code: dept.code,
@@ -59,6 +61,7 @@ export async function dbDeleteDepartment(id: string) {
 export async function dbInsertUser(user: User) {
   const { error } = await supabase.from('users').insert({
     id: user.id,
+    business_id: CURRENT_BUSINESS_ID,
     name: user.name,
     email: user.email,
     role: user.role,
@@ -95,8 +98,9 @@ export async function dbDeclineUser(id: string) {
 // Projects
 // ---------------------------------------------------------------------------
 export async function dbInsertProject(project: Project) {
-  const { error } = await supabase.from('projects').insert({
+  const { error } = await supabase.from('employee_projects').insert({
     id: project.id,
+    business_id: CURRENT_BUSINESS_ID,
     name: project.name,
     department_id: project.departmentId,
     description: project.description,
@@ -113,7 +117,7 @@ export async function dbInsertProject(project: Project) {
   if (project.members.length > 0) {
     const { error: memberError } = await supabase
       .from('project_members')
-      .insert(project.members.map((userId) => ({ project_id: project.id, user_id: userId })));
+      .insert(project.members.map((userId) => ({ business_id: CURRENT_BUSINESS_ID, project_id: project.id, user_id: userId })));
     check(memberError);
   }
 }
@@ -131,7 +135,7 @@ export async function dbUpdateProject(id: string, updates: Partial<Project>) {
   if (updates.assigneeId !== undefined) row.assignee_id = updates.assigneeId ?? null;
   if (updates.notes !== undefined) row.notes = updates.notes;
   if (Object.keys(row).length > 0) {
-    const { error } = await supabase.from('projects').update(row).eq('id', id);
+    const { error } = await supabase.from('employee_projects').update(row).eq('id', id);
     check(error);
   }
 
@@ -141,14 +145,14 @@ export async function dbUpdateProject(id: string, updates: Partial<Project>) {
     if (updates.members.length > 0) {
       const { error: insertError } = await supabase
         .from('project_members')
-        .insert(updates.members.map((userId) => ({ project_id: id, user_id: userId })));
+        .insert(updates.members.map((userId) => ({ business_id: CURRENT_BUSINESS_ID, project_id: id, user_id: userId })));
       check(insertError);
     }
   }
 }
 
 export async function dbDeleteProject(id: string) {
-  const { error } = await supabase.from('projects').delete().eq('id', id);
+  const { error } = await supabase.from('employee_projects').delete().eq('id', id);
   check(error);
 }
 
@@ -156,8 +160,9 @@ export async function dbDeleteProject(id: string) {
 // Tasks
 // ---------------------------------------------------------------------------
 export async function dbInsertTask(task: Task, position: number) {
-  const { error } = await supabase.from('tasks').insert({
+  const { error } = await supabase.from('employee_tasks').insert({
     id: task.id,
+    business_id: CURRENT_BUSINESS_ID,
     name: task.name,
     project_id: task.projectId,
     department_id: task.departmentId,
@@ -195,24 +200,25 @@ export async function dbUpdateTask(id: string, updates: Partial<Task>) {
   if (updates.dueDays !== undefined) row.due_days = updates.dueDays ?? null;
   if (updates.assignedTo !== undefined) row.assigned_to = updates.assignedTo;
   if (updates.milestones !== undefined) row.milestones = updates.milestones;
-  const { error } = await supabase.from('tasks').update(row).eq('id', id);
+  const { error } = await supabase.from('employee_tasks').update(row).eq('id', id);
   check(error);
 }
 
 export async function dbDeleteTask(id: string) {
-  const { error } = await supabase.from('tasks').delete().eq('id', id);
+  const { error } = await supabase.from('employee_tasks').delete().eq('id', id);
   check(error);
 }
 
 export async function dbReorderTasks(orderedIds: string[]) {
   await Promise.all(
-    orderedIds.map((id, index) => supabase.from('tasks').update({ position: index }).eq('id', id))
+    orderedIds.map((id, index) => supabase.from('employee_tasks').update({ position: index }).eq('id', id))
   );
 }
 
 export async function dbInsertSubtask(taskId: string, subtask: Subtask, position: number) {
   const { error } = await supabase.from('subtasks').insert({
     id: subtask.id,
+    business_id: CURRENT_BUSINESS_ID,
     task_id: taskId,
     name: subtask.name,
     owner_id: subtask.ownerId ?? null,
@@ -253,8 +259,9 @@ export async function dbReorderSubtasks(orderedIds: string[]) {
 }
 
 export async function dbInsertTaskComment(taskId: string, comment: TaskComment) {
-  const { error } = await supabase.from('task_comments').insert({
+  const { error } = await supabase.from('employee_task_comments').insert({
     id: comment.id,
+    business_id: CURRENT_BUSINESS_ID,
     task_id: taskId,
     user_name: comment.userName,
     user_avatar: comment.userAvatar,
@@ -267,6 +274,7 @@ export async function dbInsertTaskComment(taskId: string, comment: TaskComment) 
 export async function dbInsertTaskSubmission(taskId: string, submission: TaskSubmission) {
   const { error } = await supabase.from('task_submissions').insert({
     id: submission.id,
+    business_id: CURRENT_BUSINESS_ID,
     task_id: taskId,
     user_id: submission.userId,
     user_name: submission.userName,
@@ -280,7 +288,11 @@ export async function dbInsertTaskSubmission(taskId: string, submission: TaskSub
 
   if (submission.attachments.length > 0) {
     const { error: attachError } = await supabase.from('task_submission_attachments').insert(
-      submission.attachments.map((file) => ({ task_submission_id: submission.id, media_file_id: file.id }))
+      submission.attachments.map((file) => ({
+        business_id: CURRENT_BUSINESS_ID,
+        task_submission_id: submission.id,
+        media_file_id: file.id
+      }))
     );
     check(attachError);
   }
@@ -300,6 +312,7 @@ export async function dbUpdateTaskSubmission(id: string, updates: Partial<TaskSu
 export async function dbInsertMediaFile(file: MediaFile) {
   const { error } = await supabase.from('media_files').insert({
     id: file.id,
+    business_id: CURRENT_BUSINESS_ID,
     name: file.name,
     type: file.type,
     url: file.url,
@@ -319,6 +332,7 @@ export async function dbInsertMediaFile(file: MediaFile) {
 export async function dbInsertAttendance(row: Attendance) {
   const { error } = await supabase.from('attendance').insert({
     id: row.id,
+    business_id: CURRENT_BUSINESS_ID,
     user_id: row.userId,
     date: row.date,
     check_in_time: row.checkInTime,
@@ -344,6 +358,7 @@ export async function dbUpdateAttendance(id: string, updates: Partial<Attendance
 export async function dbInsertNotification(notif: Notification) {
   const { error } = await supabase.from('notifications').insert({
     id: notif.id,
+    business_id: CURRENT_BUSINESS_ID,
     user_id: notif.userId,
     title: notif.title,
     message: notif.message,
@@ -366,6 +381,7 @@ export async function dbMarkAllNotificationsRead(ids: string[]) {
 export async function dbInsertWorklog(log: DailyWorkLog) {
   const { error } = await supabase.from('daily_worklogs').insert({
     id: log.id,
+    business_id: CURRENT_BUSINESS_ID,
     user_id: log.userId,
     user_name: log.userName,
     date: log.date,
@@ -378,7 +394,11 @@ export async function dbInsertWorklog(log: DailyWorkLog) {
   if (log.attachments.length > 0) {
     const { error: attachError } = await supabase
       .from('daily_worklog_attachments')
-      .insert(log.attachments.map((file) => ({ daily_worklog_id: log.id, media_file_id: file.id })));
+      .insert(log.attachments.map((file) => ({
+        business_id: CURRENT_BUSINESS_ID,
+        daily_worklog_id: log.id,
+        media_file_id: file.id
+      })));
     check(attachError);
   }
 }

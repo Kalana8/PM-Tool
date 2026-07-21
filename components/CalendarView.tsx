@@ -9,6 +9,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Task, User, Project, TaskCategory, TaskPriority } from '../lib/types';
+import TimeRangeGrid from './calendar/TimeRangeGrid';
 
 interface CalendarViewProps {
   tasks: Task[];
@@ -26,12 +27,39 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Week view: 24-hour time grid (Teams/Outlook-style), one row per hour
 const ROW_HEIGHT = 48; // px per hour
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES_PER_DAY = 24 * 60;
 const formatHour = (h: number) => `${h.toString().padStart(2, '0')}:00`;
 const parseTimeToMinutes = (time?: string): number | null => {
   if (!time) return null;
   const [h, m] = time.split(':').map(Number);
   if (Number.isNaN(h)) return null;
   return h * 60 + (Number.isNaN(m) ? 0 : m);
+};
+
+// Date helpers for month/week navigation. Noon local time sidesteps DST edge
+// cases when a date is only ever used for its year/month/day components.
+const pad2 = (n: number) => n.toString().padStart(2, '0');
+const makeLocalDate = (year: number, month: number, day: number): Date => new Date(year, month, day, 12, 0, 0);
+const formatDateStr = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseDateStr = (dateStr: string): Date => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return makeLocalDate(y, m - 1, d);
+};
+const startOfWeek = (date: Date): Date => {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+};
+// Clamps the day-of-month so e.g. Jan 31 -> Feb doesn't roll into March.
+const shiftMonth = (date: Date, delta: number): Date => {
+  const targetFirst = new Date(date.getFullYear(), date.getMonth() + delta, 1, 12, 0, 0);
+  const daysInTargetMonth = new Date(targetFirst.getFullYear(), targetFirst.getMonth() + 1, 0).getDate();
+  return makeLocalDate(targetFirst.getFullYear(), targetFirst.getMonth(), Math.min(date.getDate(), daysInTargetMonth));
+};
+const shiftWeek = (date: Date, deltaWeeks: number): Date => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + deltaWeeks * 7);
+  return d;
 };
 
 export default function CalendarView({ tasks, users, projects, userRole, currentUserId, onAddTask }: CalendarViewProps) {
@@ -92,38 +120,43 @@ export default function CalendarView({ tasks, users, projects, userRole, current
     setAddTaskDateStr(null);
   };
 
-  // Calendar parameters for July 2026
-  // July 2026 starts on a Wednesday (offset: 3 days of previous month June: 28, 29, 30)
-  const monthName = 'July 2026';
-  const totalDays = 31;
-  const startOffset = 3; // Sun: 0, Mon: 1, Tue: 2, Wed: 3
+  // Single source of truth for the "currently focused" day - drives both the
+  // month grid and the week grid, and carries over when switching view modes.
+  const [focusedDate, setFocusedDate] = useState<Date>(() => makeLocalDate(2026, 6, 7)); // July 7, 2026
+  const focusedDateStr = formatDateStr(focusedDate);
 
-  // Create grid cells (42 cells / 6 weeks)
+  const viewedYear = focusedDate.getFullYear();
+  const viewedMonth = focusedDate.getMonth(); // 0-indexed
+  const monthName = focusedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  // Month grid: 42 cells (6 weeks), including the leading/trailing days of
+  // the adjacent months needed to fill the first and last rows.
   const cells: Array<{ dayNum: number; isCurrentMonth: boolean; dateStr: string }> = [];
+  const startOffset = makeLocalDate(viewedYear, viewedMonth, 1).getDay(); // Sun: 0 ... Sat: 6
+  const daysInMonth = new Date(viewedYear, viewedMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(viewedYear, viewedMonth, 0).getDate();
 
   for (let i = startOffset - 1; i >= 0; i--) {
-    const day = 30 - i;
-    cells.push({ dayNum: day, isCurrentMonth: false, dateStr: `2026-06-${day}` });
+    const day = daysInPrevMonth - i;
+    cells.push({ dayNum: day, isCurrentMonth: false, dateStr: formatDateStr(makeLocalDate(viewedYear, viewedMonth - 1, day)) });
   }
-
-  for (let i = 1; i <= totalDays; i++) {
-    const dayStr = i < 10 ? `0${i}` : `${i}`;
-    cells.push({ dayNum: i, isCurrentMonth: true, dateStr: `2026-07-${dayStr}` });
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ dayNum: day, isCurrentMonth: true, dateStr: formatDateStr(makeLocalDate(viewedYear, viewedMonth, day)) });
   }
-
   const totalCells = 42;
   const nextMonthDaysNeeded = totalCells - cells.length;
-  for (let i = 1; i <= nextMonthDaysNeeded; i++) {
-    const dayStr = i < 10 ? `0${i}` : `${i}`;
-    cells.push({ dayNum: i, isCurrentMonth: false, dateStr: `2026-08-${dayStr}` });
+  for (let day = 1; day <= nextMonthDaysNeeded; day++) {
+    cells.push({ dayNum: day, isCurrentMonth: false, dateStr: formatDateStr(makeLocalDate(viewedYear, viewedMonth + 1, day)) });
   }
 
-  // Single source of truth for "currently focused" date: an index into `cells`
-  const [anchorIdx, setAnchorIdx] = useState<number>(startOffset + 6); // July 7th
-
-  const anchorCell = cells[anchorIdx];
-  const weekStartIdx = anchorIdx - (anchorIdx % 7);
-  const weekCells = cells.slice(weekStartIdx, weekStartIdx + 7);
+  // Week grid: 7 consecutive days (Sun-Sat) around focusedDate, computed
+  // independently of the month grid so a week can straddle a month boundary.
+  const weekStart = startOfWeek(focusedDate);
+  const weekCells = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return { dayNum: d.getDate(), dateStr: formatDateStr(d) };
+  });
 
   const getTasksForDate = (dateStr: string) => tasks.filter((t) => t.dueDate === dateStr);
 
@@ -150,27 +183,11 @@ export default function CalendarView({ tasks, users, projects, userRole, current
   };
 
   const handlePrev = () => {
-    if (viewMode === 'week') {
-      if (weekStartIdx - 7 < 0) {
-        alert('Prototype constraint: Navigation locked to current sprint (July 2026).');
-        return;
-      }
-      setAnchorIdx(anchorIdx - 7);
-    } else {
-      alert('Prototype constraint: Navigation locked to current sprint (July 2026).');
-    }
+    setFocusedDate((prev) => (viewMode === 'week' ? shiftWeek(prev, -1) : shiftMonth(prev, -1)));
   };
 
   const handleNext = () => {
-    if (viewMode === 'week') {
-      if (weekStartIdx + 7 > totalCells - 7) {
-        alert('Prototype constraint: Navigation locked to current sprint (July 2026).');
-        return;
-      }
-      setAnchorIdx(anchorIdx + 7);
-    } else {
-      alert('Prototype constraint: Navigation locked to current sprint (July 2026).');
-    }
+    setFocusedDate((prev) => (viewMode === 'week' ? shiftWeek(prev, 1) : shiftMonth(prev, 1)));
   };
 
   const handleOpenModal = (dateStr: string) => setModalDateStr(dateStr);
@@ -273,7 +290,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
             <div className="grid grid-cols-7 grid-rows-6 gap-2 flex-1 min-h-0">
               {cells.map((cell, idx) => {
                 const dateTasks = getTasksForDate(cell.dateStr);
-                const isSelected = cell.dateStr === anchorCell?.dateStr;
+                const isSelected = cell.dateStr === focusedDateStr;
 
                 return (
                   <div
@@ -283,7 +300,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                     tabIndex={cell.isCurrentMonth ? 0 : undefined}
                     onClick={() => {
                       if (!cell.isCurrentMonth) return;
-                      setAnchorIdx(idx);
+                      setFocusedDate(parseDateStr(cell.dateStr));
                       handleOpenModal(cell.dateStr);
                     }}
                     className={`relative rounded-xl border p-2 flex flex-col justify-between text-left transition-all ${
@@ -338,39 +355,34 @@ export default function CalendarView({ tasks, users, projects, userRole, current
             <div className="flex border-b border-gray-100 dark:border-gray-900 shrink-0">
               <div className="w-14 shrink-0" />
               {weekCells.map((cell) => {
-                const isSelected = cell.dateStr === anchorCell?.dateStr;
-                const allDayTasks = cell.isCurrentMonth ? getAllDayTasksForDate(cell.dateStr) : [];
+                const isSelected = cell.dateStr === focusedDateStr;
+                const allDayTasks = getAllDayTasksForDate(cell.dateStr);
 
                 return (
                   <div
                     key={cell.dateStr}
                     id={`week-day-column-${cell.dateStr}`}
-                    role={cell.isCurrentMonth ? 'button' : undefined}
-                    title={cell.isCurrentMonth ? `View daily works for ${cell.dateStr}` : undefined}
+                    role="button"
+                    title={`View daily works for ${cell.dateStr}`}
                     onClick={() => {
-                      if (!cell.isCurrentMonth) return;
-                      setAnchorIdx(weekStartIdx + weekCells.indexOf(cell));
+                      setFocusedDate(parseDateStr(cell.dateStr));
                       handleOpenModal(cell.dateStr);
                     }}
                     className={`relative flex-1 min-w-0 px-2 py-2 border-l border-gray-100 dark:border-gray-900 transition-colors ${
-                      !cell.isCurrentMonth
-                        ? 'opacity-40'
-                        : isSelected
+                      isSelected
                         ? 'bg-blue-50/30 dark:bg-blue-950/10 cursor-pointer'
                         : 'cursor-pointer hover:bg-gray-50/60 dark:hover:bg-gray-900/30'
                     }`}
                   >
-                    {cell.isCurrentMonth && (
-                      <button
-                        id={`week-quick-add-${cell.dateStr}`}
-                        type="button"
-                        title="Add task on this date"
-                        onClick={(e) => handleOpenQuickAdd(e, cell.dateStr)}
-                        className="absolute top-1 right-1 rounded-md p-0.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 dark:text-gray-700 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      id={`week-quick-add-${cell.dateStr}`}
+                      type="button"
+                      title="Add task on this date"
+                      onClick={(e) => handleOpenQuickAdd(e, cell.dateStr)}
+                      className="absolute top-1 right-1 rounded-md p-0.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 dark:text-gray-700 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                       {WEEKDAY_LABELS[weekCells.indexOf(cell)]}
                     </p>
@@ -421,14 +433,12 @@ export default function CalendarView({ tasks, users, projects, userRole, current
 
                 {/* One column per day, tasks positioned by due time */}
                 {weekCells.map((cell) => {
-                  const timedTasks = cell.isCurrentMonth ? getTimedTasksForDate(cell.dateStr) : [];
+                  const timedTasks = getTimedTasksForDate(cell.dateStr);
 
                   return (
                     <div
                       key={cell.dateStr}
-                      className={`relative flex-1 min-w-0 border-l border-gray-100 dark:border-gray-900 ${
-                        !cell.isCurrentMonth ? 'opacity-40' : ''
-                      }`}
+                      className="relative flex-1 min-w-0 border-l border-gray-100 dark:border-gray-900"
                       style={{ height: ROW_HEIGHT * 24 }}
                     >
                       {HOURS.map((h) => (
@@ -452,7 +462,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                             }`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setAnchorIdx(weekStartIdx + weekCells.indexOf(cell));
+                              setFocusedDate(parseDateStr(cell.dateStr));
                               handleOpenModal(cell.dateStr);
                             }}
                           >
@@ -476,7 +486,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
           onClick={handleCloseModal}
         >
           <div
-            className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900 shadow-2xl p-6 mx-4"
+            className="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900 shadow-2xl p-6 mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
@@ -512,18 +522,71 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                         {user?.title && <p className="text-[9px] text-gray-400">{user.title}</p>}
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      {userTasks.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between gap-2 text-[11px] bg-gray-50 dark:bg-gray-900/40 rounded-lg px-2.5 py-1.5"
-                        >
-                          <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{t.name}</span>
-                          <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${statusPillClasses(t.status)}`}>
-                            {t.status}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      {userTasks.map((t) => {
+                        const project = projects.find((p) => p.id === t.projectId);
+                        const priorityPillClasses =
+                          t.priority === 'High'
+                            ? 'bg-rose-50 text-rose-600 border-rose-100'
+                            : t.priority === 'Medium'
+                            ? 'bg-amber-50 text-amber-600 border-amber-100'
+                            : 'bg-blue-50 text-blue-600 border-blue-100';
+                        const barColorClass =
+                          t.priority === 'High' ? 'bg-rose-500' : t.priority === 'Medium' ? 'bg-amber-500' : 'bg-blue-500';
+                        // This day is always t.dueDate here (getTasksForDate filters on it), so the
+                        // colored segment starts at startTime only if the task also started today,
+                        // otherwise it's been running since midnight.
+                        const blockStartMinutes = t.startDate === modalDateStr ? parseTimeToMinutes(t.startTime) ?? 0 : 0;
+                        const blockEndMinutes = parseTimeToMinutes(t.dueTime);
+
+                        return (
+                          <div
+                            key={t.id}
+                            id={`daily-work-task-${t.id}`}
+                            className="rounded-lg bg-gray-50 dark:bg-gray-900/40 px-2.5 py-2 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200 truncate">{t.name}</span>
+                              <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${statusPillClasses(t.status)}`}>
+                                {t.status}
+                              </span>
+                            </div>
+
+                            {t.description && (
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400">{t.description}</p>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] font-semibold">
+                              <span className={`px-1.5 py-0.5 rounded border ${priorityPillClasses}`}>{t.priority}</span>
+                              {project && <span className="text-gray-400">{project.name}</span>}
+                              <span className="text-gray-400">{t.progress}% complete</span>
+                              <span className="text-gray-400 capitalize">{t.category}</span>
+                            </div>
+
+                            {blockEndMinutes !== null ? (
+                              <>
+                                <p className="text-[9px] font-mono text-gray-400">
+                                  {t.startDate === modalDateStr && t.startTime ? t.startTime : '00:00'} → {t.dueTime}
+                                </p>
+                                <div
+                                  id={`daily-work-task-timebar-${t.id}`}
+                                  className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-800 relative overflow-hidden"
+                                >
+                                  <div
+                                    className={`absolute inset-y-0 rounded-full ${barColorClass}`}
+                                    style={{
+                                      left: `${(blockStartMinutes / MINUTES_PER_DAY) * 100}%`,
+                                      width: `${Math.max(((blockEndMinutes - blockStartMinutes) / MINUTES_PER_DAY) * 100, 1.5)}%`
+                                    }}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-[9px] font-mono text-gray-400">All day</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))
@@ -540,10 +603,10 @@ export default function CalendarView({ tasks, users, projects, userRole, current
           onClick={handleCloseQuickAdd}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900 shadow-2xl p-6 mx-4"
+            className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900 shadow-2xl mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 px-6 pt-6 pb-3 shrink-0">
               <div>
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Add Task</h3>
                 <p className="text-[10px] text-gray-400 mt-0.5">
@@ -559,152 +622,171 @@ export default function CalendarView({ tasks, users, projects, userRole, current
               </button>
             </div>
 
-            <form id="quick-add-task-form" onSubmit={handleQuickAddSubmit} className="space-y-3.5">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title</label>
-                <input
-                  id="quick-task-title-input"
-                  type="text"
-                  required
-                  placeholder="E.g. Prepare sprint retro notes..."
-                  value={quickName}
-                  onChange={(e) => setQuickName(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+            <form
+              id="quick-add-task-form"
+              onSubmit={handleQuickAddSubmit}
+              className="flex-1 min-h-0 flex flex-col overflow-y-auto"
+            >
+              <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-5 px-6 py-4">
+                {/* Left: task fields */}
+                <div className="space-y-3.5 md:w-72 shrink-0">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title</label>
+                    <input
+                      id="quick-task-title-input"
+                      type="text"
+                      required
+                      placeholder="E.g. Prepare sprint retro notes..."
+                      value={quickName}
+                      onChange={(e) => setQuickName(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Target Project</label>
-                <select
-                  id="quick-task-project-select"
-                  required
-                  value={quickProjectId}
-                  onChange={(e) => setQuickProjectId(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Select Project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Target Project</label>
+                    <select
+                      id="quick-task-project-select"
+                      required
+                      value={quickProjectId}
+                      onChange={(e) => setQuickProjectId(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Staff Assignee</label>
-                <select
-                  id="quick-task-assignee-select"
-                  required
-                  value={quickAssignedTo}
-                  onChange={(e) => setQuickAssignedTo(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Select Staff</option>
-                  {users.filter((u) => u.role === 'Team Member' || u.role === 'Team Leader').map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Staff Assignee</label>
+                    <select
+                      id="quick-task-assignee-select"
+                      required
+                      value={quickAssignedTo}
+                      onChange={(e) => setQuickAssignedTo(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Select Staff</option>
+                      {users.filter((u) => u.role === 'Team Member' || u.role === 'Team Leader').map((u) => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* Teams-style start/due date & time scheduling */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
-                  <input
-                    id="quick-task-startdate-input"
-                    type="date"
-                    required
-                    value={quickStartDate}
-                    onChange={(e) => setQuickStartDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
+                  {/* Teams-style start/due date & time scheduling */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
+                      <input
+                        id="quick-task-startdate-input"
+                        type="date"
+                        required
+                        value={quickStartDate}
+                        onChange={(e) => setQuickStartDate(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Time</label>
+                      <input
+                        id="quick-task-starttime-input"
+                        type="time"
+                        disabled={quickAllDay}
+                        value={quickStartTime}
+                        onChange={(e) => setQuickStartTime(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
+                      <input
+                        id="quick-task-duedate-input"
+                        type="date"
+                        required
+                        value={quickDueDate}
+                        onChange={(e) => setQuickDueDate(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Time</label>
+                      <input
+                        id="quick-task-duetime-input"
+                        type="time"
+                        disabled={quickAllDay}
+                        value={quickDueTime}
+                        onChange={(e) => setQuickDueTime(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <button
+                      id="quick-task-allday-toggle"
+                      type="button"
+                      role="switch"
+                      aria-checked={quickAllDay}
+                      onClick={() => setQuickAllDay((prev) => !prev)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                        quickAllDay ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-800'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          quickAllDay ? 'translate-x-4.5' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">All day</span>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Category</label>
+                      <select
+                        id="quick-task-category-select"
+                        value={quickCategory}
+                        onChange={(e) => setQuickCategory(e.target.value as TaskCategory)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="daily">Daily Task</option>
+                        <option value="continuous">Continuous Task</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Priority</label>
+                      <select
+                        id="quick-task-priority-select"
+                        value={quickPriority}
+                        onChange={(e) => setQuickPriority(e.target.value as TaskPriority)}
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: MS Teams-style colored time-range preview, live-updated from the fields above */}
+                <div className="flex-1 min-h-[280px] md:min-h-0 md:border-l md:border-gray-100 md:dark:border-gray-900 md:pl-5">
+                  <TimeRangeGrid
+                    startDate={quickStartDate || addTaskDateStr}
+                    startTime={quickAllDay ? '00:00' : quickStartTime}
+                    endDate={quickDueDate || addTaskDateStr}
+                    endTime={quickAllDay ? '23:59' : quickDueTime}
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Time</label>
-                  <input
-                    id="quick-task-starttime-input"
-                    type="time"
-                    disabled={quickAllDay}
-                    value={quickStartTime}
-                    onChange={(e) => setQuickStartTime(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
-                  <input
-                    id="quick-task-duedate-input"
-                    type="date"
-                    required
-                    value={quickDueDate}
-                    onChange={(e) => setQuickDueDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Time</label>
-                  <input
-                    id="quick-task-duetime-input"
-                    type="time"
-                    disabled={quickAllDay}
-                    value={quickDueTime}
-                    onChange={(e) => setQuickDueTime(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <button
-                  id="quick-task-allday-toggle"
-                  type="button"
-                  role="switch"
-                  aria-checked={quickAllDay}
-                  onClick={() => setQuickAllDay((prev) => !prev)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
-                    quickAllDay ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-800'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                      quickAllDay ? 'translate-x-4.5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">All day</span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Category</label>
-                  <select
-                    id="quick-task-category-select"
-                    value={quickCategory}
-                    onChange={(e) => setQuickCategory(e.target.value as TaskCategory)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="daily">Daily Task</option>
-                    <option value="continuous">Continuous Task</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Priority</label>
-                  <select
-                    id="quick-task-priority-select"
-                    value={quickPriority}
-                    onChange={(e) => setQuickPriority(e.target.value as TaskPriority)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-900 pt-4">
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-900 px-6 py-4 shrink-0">
                 <button
                   id="cancel-quick-add-task-btn"
                   type="button"

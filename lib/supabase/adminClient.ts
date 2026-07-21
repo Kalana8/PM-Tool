@@ -9,9 +9,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // doesn't break `next build`/`next dev` for everyone else when SUPABASE_SERVICE_ROLE_KEY
 // hasn't been configured yet — only the admin routes that actually call this fail, and only
 // when they're actually invoked.
-let cached: SupabaseClient | null = null;
+let cached: SupabaseClient<any, 'pm'> | null = null;
 
-export function getSupabaseAdmin(): SupabaseClient {
+export function getSupabaseAdmin(): SupabaseClient<any, 'pm'> {
   if (cached) return cached;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,8 +20,12 @@ export function getSupabaseAdmin(): SupabaseClient {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
   }
 
+  // Default schema is `pm` (this app's tables live there alongside other apps'
+  // tables) — callers that need the shared `public` lobby tables (businesses,
+  // business_members) use `.schema('public')` on a per-call basis instead.
   cached = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'pm' }
   });
   return cached;
 }

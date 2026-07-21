@@ -9,4 +9,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// This app's tables live in the `pm` schema (shared with other apps' tables
+// there), not `public` — every `.from(...)` call elsewhere in the app
+// resolves against it without changes. `projects`/`tasks`/`task_comments`
+// were renamed to `employee_projects`/`employee_tasks`/`employee_task_comments`
+// to avoid colliding with pm's existing tables of those names.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: { schema: 'pm' }
+});

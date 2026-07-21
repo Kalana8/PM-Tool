@@ -157,7 +157,7 @@ function mapTask(row: any): Task {
       .slice()
       .sort((a: any, b: any) => a.position - b.position)
       .map(mapSubtask),
-    comments: (row.task_comments ?? []).map(mapTaskComment),
+    comments: (row.employee_task_comments ?? []).map(mapTaskComment),
     submissions: (row.task_submissions ?? []).map(mapTaskSubmission)
   };
 }
@@ -230,11 +230,11 @@ export async function fetchAllData(): Promise<AppData> {
     supabase.from('users').select('*').not('role', 'is', null).order('name'),
     supabase.from('users').select('id, auth_id, name, email, avatar, created_at').is('role', null).order('created_at'),
     supabase.from('media_files').select('*').order('date_added', { ascending: false }),
-    supabase.from('projects').select('*, project_members(user_id)').order('created_at'),
+    supabase.from('employee_projects').select('*, project_members(user_id)').order('created_at'),
     supabase
-      .from('tasks')
+      .from('employee_tasks')
       .select(
-        '*, subtasks(*), task_comments(*), task_submissions(*, task_submission_attachments(media_files(*)))'
+        '*, subtasks(*), employee_task_comments(*), task_submissions(*, task_submission_attachments(media_files(*)))'
       )
       .order('position'),
     supabase.from('attendance').select('*').order('date', { ascending: false }),
