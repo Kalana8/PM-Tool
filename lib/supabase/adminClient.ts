@@ -20,12 +20,14 @@ export function getSupabaseAdmin(): SupabaseClient<any, 'pm'> {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
   }
 
-  // Default schema is `pm` (this app's tables live there alongside other apps'
-  // tables) — callers that need the shared `public` lobby tables (businesses,
+  // Default schema comes from NEXT_PUBLIC_TOOL_SCHEMA (source of truth, set to
+  // `pm`), falling back to `pm` so behaviour is unchanged if the env var is
+  // missing. Callers that need the shared `public` lobby tables (businesses,
   // business_members) use `.schema('public')` on a per-call basis instead.
+  const TOOL_SCHEMA = (process.env.NEXT_PUBLIC_TOOL_SCHEMA ?? 'pm') as 'pm';
   cached = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    db: { schema: 'pm' }
+    db: { schema: TOOL_SCHEMA }
   });
   return cached;
 }

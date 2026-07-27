@@ -48,8 +48,6 @@ import {
   Subtask
 } from '../lib/types';
 import { adminCreateUser, adminDeleteUser } from '../lib/supabase/adminApi';
-import LoginPage from '../components/LoginPage';
-import ResetPasswordPage from '../components/ResetPasswordPage';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import CommandPalette from '../components/CommandPalette';
@@ -193,23 +191,16 @@ export default function Page() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    // Hard navigation (not router.push) because the auth cookie is shared across
+    // subdomains — the whole document must reload against the central portal.
+    window.location.href = process.env.NEXT_PUBLIC_PORTAL_URL || '/dev-login';
   };
 
   // ---------------------------------------------------------------------------
-  // Gating: session check -> login -> data load -> app shell
+  // Gating: data load -> app shell. Auth (session presence) is enforced by
+  // middleware before this page ever renders; while the session/profile/data
+  // are loading, the `!currentUser || !data` guard below shows a spinner.
   // ---------------------------------------------------------------------------
-  if (session === undefined) {
-    return <FullScreenMessage icon={<Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />} title="Checking session..." />;
-  }
-
-  if (!session) {
-    return <LoginPage />;
-  }
-
-  if (isRecoveryMode) {
-    return <ResetPasswordPage onDone={() => setIsRecoveryMode(false)} />;
-  }
-
   if (loadError) {
     return (
       <FullScreenMessage
