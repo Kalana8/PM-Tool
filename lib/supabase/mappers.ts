@@ -2,7 +2,7 @@
 // the app never has to know about snake_case columns or Postgrest's nested-embed
 // shape — components keep working against the exact same `lib/types.ts` shapes
 // they always have.
-import { supabase } from '../supabaseClient';
+import { supabase } from './pm-client';
 import type {
   Department,
   User,
@@ -34,7 +34,18 @@ function mapDepartment(row: any): Department {
   };
 }
 
-function mapUser(row: any): User {
+// New/JIT-provisioned users have avatar = '' (the column's DB default) until
+// someone uploads a real photo — an empty string in an <img src> makes the
+// browser re-request the current page, so every user always gets a real
+// (generated, no network dependency) placeholder instead.
+function avatarOrPlaceholder(avatar: string | null | undefined, name: string): string {
+  if (avatar) return avatar;
+  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#64748b"/><text x="32" y="43" font-size="28" text-anchor="middle" fill="#fff" font-family="sans-serif">${initial}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function mapUser(row: any): User {
   return {
     id: row.id,
     name: row.name,
@@ -42,7 +53,7 @@ function mapUser(row: any): User {
     role: row.role,
     departmentId: row.department_id,
     status: row.status,
-    avatar: row.avatar,
+    avatar: avatarOrPlaceholder(row.avatar, row.name),
     title: row.title,
     performanceScore: row.performance_score,
     phone: row.phone ?? undefined,
@@ -56,7 +67,7 @@ function mapPendingUser(row: any): PendingUser {
     authId: row.auth_id,
     name: row.name,
     email: row.email,
-    avatar: row.avatar,
+    avatar: avatarOrPlaceholder(row.avatar, row.name),
     createdAt: row.created_at
   };
 }
@@ -267,10 +278,4 @@ export async function fetchAllData(): Promise<AppData> {
     notifications: (notificationsRes.data ?? []).map(mapNotification),
     worklogs: (worklogsRes.data ?? []).map(mapWorklog)
   };
-}
-
-export async function fetchCurrentProfile(authId: string): Promise<User | null> {
-  const { data, error } = await supabase.from('users').select('*').eq('auth_id', authId).maybeSingle();
-  if (error) throw error;
-  return data ? mapUser(data) : null;
 }

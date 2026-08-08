@@ -1,3 +1,16 @@
 @import "tailwindcss";
 
+/* BizYep toggles dark mode by adding/removing a .dark class on <html>
+   (see components/bizyep-app.tsx handleToggleDarkMode), so dark: needs to
+   key off that class rather than Tailwind v4's default prefers-color-scheme. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fafafa;
+  --foreground: #171717;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

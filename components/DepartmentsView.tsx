@@ -1850,31 +1850,7 @@ export default function DepartmentsView({
           </tbody>
         </table>
       </div>
-
-      {/* Real Zoho Limit Banner visual element at the bottom (Screenshot 1) */}
-      {showUpgradeLimit && (
-        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/60 rounded-xl p-3 flex items-center justify-between text-xs transition-all animate-fadeIn">
-          <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-medium">
-            <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
-            <span>You have reached the maximum limit of enterprise initiatives allowed.</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => alert('OmniWork Suite Enterprise Upgrade Requested! Thank you for choosing us.')}
-              className="bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1 rounded-lg text-[11px] shadow-sm shadow-pink-500/10 cursor-pointer"
-            >
-              Upgrade Now
-            </button>
-            <button
-              onClick={() => setShowUpgradeLimit(false)}
-              className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded text-rose-400"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
+    
       {/* Add / Edit Department Drawer Modal */}
       {isDeptFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-sm animate-fadeIn">

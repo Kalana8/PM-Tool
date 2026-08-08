@@ -1,21 +1,17 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css'; // Global styles
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
+import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'OmniWork - Enterprise Project & Employee Management',
-  description: 'Enterprise project tracking, attendance rosters, and team task management suite.',
+  title: "Project Management",
+  description: "Business tool platform",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable}`}>
-      <body suppressHydrationWarning className="antialiased">{children}</body>
+    <html lang="en">
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

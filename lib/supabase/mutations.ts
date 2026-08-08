@@ -1,10 +1,12 @@
 // Write-side helpers: every function here takes the same app-shaped (camelCase)
 // objects the rest of the app already builds, converts them to snake_case rows,
-// and performs the equivalent Supabase insert/update/delete. Callers in
-// app/page.tsx still own local state — they call these, then patch `data`
-// themselves so the UI updates immediately without a full refetch.
-import { supabase } from '../supabaseClient';
-import { CURRENT_BUSINESS_ID } from '../constants';
+// and performs the equivalent Supabase insert/update/delete. Callers own local
+// state — they call these, then patch `data` themselves so the UI updates
+// immediately without a full refetch.
+//
+// businessId is threaded in from the caller (sourced from getActiveBusiness())
+// rather than a hardcoded constant, since every pm.* table is multi-tenant.
+import { supabase } from './pm-client';
 import type {
   Department,
   User,
@@ -26,10 +28,10 @@ const check = (error: { message: string } | null) => {
 // ---------------------------------------------------------------------------
 // Departments
 // ---------------------------------------------------------------------------
-export async function dbInsertDepartment(dept: Department) {
+export async function dbInsertDepartment(dept: Department, businessId: string) {
   const { error } = await supabase.from('departments').insert({
     id: dept.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     name: dept.name,
     icon: dept.icon,
     code: dept.code,
@@ -46,7 +48,7 @@ export async function dbUpdateDepartment(id: string, updates: Partial<Department
   if (updates.code !== undefined) row.code = updates.code;
   if (updates.description !== undefined) row.description = updates.description;
   if (updates.status !== undefined) row.status = updates.status;
-  const { error } = await supabase.from('departments').update(row).eq('id', id);
+  const { error } = await supabase.from('departments').update(row as any).eq('id', id);
   check(error);
 }
 
@@ -58,10 +60,10 @@ export async function dbDeleteDepartment(id: string) {
 // ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
-export async function dbInsertUser(user: User) {
+export async function dbInsertUser(user: User, businessId: string) {
   const { error } = await supabase.from('users').insert({
     id: user.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     name: user.name,
     email: user.email,
     role: user.role,
@@ -85,7 +87,7 @@ export async function dbUpdateUser(id: string, updates: Partial<User>) {
   if (updates.phone !== undefined) row.phone = updates.phone;
   if (updates.departmentId !== undefined) row.department_id = updates.departmentId;
   if (updates.teamLeaderId !== undefined) row.team_leader_id = updates.teamLeaderId || null;
-  const { error } = await supabase.from('users').update(row).eq('id', id);
+  const { error } = await supabase.from('users').update(row as any).eq('id', id);
   check(error);
 }
 
@@ -94,13 +96,21 @@ export async function dbDeclineUser(id: string) {
   check(error);
 }
 
+// Removes only this tool's pm.users profile row — the actual login/business
+// membership is owned by the lead's portal and isn't touched here (see
+// app/api/admin/delete-user disposition in the port plan).
+export async function dbDeleteUser(id: string) {
+  const { error } = await supabase.from('users').delete().eq('id', id);
+  check(error);
+}
+
 // ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
-export async function dbInsertProject(project: Project) {
+export async function dbInsertProject(project: Project, businessId: string) {
   const { error } = await supabase.from('employee_projects').insert({
     id: project.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     name: project.name,
     department_id: project.departmentId,
     description: project.description,
@@ -117,12 +127,12 @@ export async function dbInsertProject(project: Project) {
   if (project.members.length > 0) {
     const { error: memberError } = await supabase
       .from('project_members')
-      .insert(project.members.map((userId) => ({ business_id: CURRENT_BUSINESS_ID, project_id: project.id, user_id: userId })));
+      .insert(project.members.map((userId) => ({ business_id: businessId, project_id: project.id, user_id: userId })));
     check(memberError);
   }
 }
 
-export async function dbUpdateProject(id: string, updates: Partial<Project>) {
+export async function dbUpdateProject(id: string, updates: Partial<Project>, businessId: string) {
   const row: Record<string, unknown> = {};
   if (updates.name !== undefined) row.name = updates.name;
   if (updates.departmentId !== undefined) row.department_id = updates.departmentId;
@@ -135,7 +145,7 @@ export async function dbUpdateProject(id: string, updates: Partial<Project>) {
   if (updates.assigneeId !== undefined) row.assignee_id = updates.assigneeId ?? null;
   if (updates.notes !== undefined) row.notes = updates.notes;
   if (Object.keys(row).length > 0) {
-    const { error } = await supabase.from('employee_projects').update(row).eq('id', id);
+    const { error } = await supabase.from('employee_projects').update(row as any).eq('id', id);
     check(error);
   }
 
@@ -145,7 +155,7 @@ export async function dbUpdateProject(id: string, updates: Partial<Project>) {
     if (updates.members.length > 0) {
       const { error: insertError } = await supabase
         .from('project_members')
-        .insert(updates.members.map((userId) => ({ business_id: CURRENT_BUSINESS_ID, project_id: id, user_id: userId })));
+        .insert(updates.members.map((userId) => ({ business_id: businessId, project_id: id, user_id: userId })));
       check(insertError);
     }
   }
@@ -159,10 +169,10 @@ export async function dbDeleteProject(id: string) {
 // ---------------------------------------------------------------------------
 // Tasks
 // ---------------------------------------------------------------------------
-export async function dbInsertTask(task: Task, position: number) {
+export async function dbInsertTask(task: Task, position: number, businessId: string) {
   const { error } = await supabase.from('employee_tasks').insert({
     id: task.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     name: task.name,
     project_id: task.projectId,
     department_id: task.departmentId,
@@ -177,7 +187,7 @@ export async function dbInsertTask(task: Task, position: number) {
     due_time: task.dueTime ?? null,
     due_days: task.dueDays ?? null,
     assigned_to: task.assignedTo,
-    milestones: task.milestones ?? [],
+    milestones: (task.milestones ?? []) as any,
     position
   });
   check(error);
@@ -200,7 +210,7 @@ export async function dbUpdateTask(id: string, updates: Partial<Task>) {
   if (updates.dueDays !== undefined) row.due_days = updates.dueDays ?? null;
   if (updates.assignedTo !== undefined) row.assigned_to = updates.assignedTo;
   if (updates.milestones !== undefined) row.milestones = updates.milestones;
-  const { error } = await supabase.from('employee_tasks').update(row).eq('id', id);
+  const { error } = await supabase.from('employee_tasks').update(row as any).eq('id', id);
   check(error);
 }
 
@@ -215,10 +225,10 @@ export async function dbReorderTasks(orderedIds: string[]) {
   );
 }
 
-export async function dbInsertSubtask(taskId: string, subtask: Subtask, position: number) {
+export async function dbInsertSubtask(taskId: string, subtask: Subtask, position: number, businessId: string) {
   const { error } = await supabase.from('subtasks').insert({
     id: subtask.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     task_id: taskId,
     name: subtask.name,
     owner_id: subtask.ownerId ?? null,
@@ -243,7 +253,7 @@ export async function dbUpdateSubtask(id: string, updates: Partial<Subtask>) {
   if (updates.startDate !== undefined) row.start_date = updates.startDate ?? null;
   if (updates.dueDate !== undefined) row.due_date = updates.dueDate ?? null;
   if (updates.progress !== undefined) row.progress = updates.progress;
-  const { error } = await supabase.from('subtasks').update(row).eq('id', id);
+  const { error } = await supabase.from('subtasks').update(row as any).eq('id', id);
   check(error);
 }
 
@@ -258,10 +268,10 @@ export async function dbReorderSubtasks(orderedIds: string[]) {
   );
 }
 
-export async function dbInsertTaskComment(taskId: string, comment: TaskComment) {
+export async function dbInsertTaskComment(taskId: string, comment: TaskComment, businessId: string) {
   const { error } = await supabase.from('employee_task_comments').insert({
     id: comment.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     task_id: taskId,
     user_name: comment.userName,
     user_avatar: comment.userAvatar,
@@ -271,10 +281,10 @@ export async function dbInsertTaskComment(taskId: string, comment: TaskComment) 
   check(error);
 }
 
-export async function dbInsertTaskSubmission(taskId: string, submission: TaskSubmission) {
+export async function dbInsertTaskSubmission(taskId: string, submission: TaskSubmission, businessId: string) {
   const { error } = await supabase.from('task_submissions').insert({
     id: submission.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     task_id: taskId,
     user_id: submission.userId,
     user_name: submission.userName,
@@ -289,7 +299,7 @@ export async function dbInsertTaskSubmission(taskId: string, submission: TaskSub
   if (submission.attachments.length > 0) {
     const { error: attachError } = await supabase.from('task_submission_attachments').insert(
       submission.attachments.map((file) => ({
-        business_id: CURRENT_BUSINESS_ID,
+        business_id: businessId,
         task_submission_id: submission.id,
         media_file_id: file.id
       }))
@@ -302,17 +312,17 @@ export async function dbUpdateTaskSubmission(id: string, updates: Partial<TaskSu
   const row: Record<string, unknown> = {};
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.feedback !== undefined) row.feedback = updates.feedback ?? null;
-  const { error } = await supabase.from('task_submissions').update(row).eq('id', id);
+  const { error } = await supabase.from('task_submissions').update(row as any).eq('id', id);
   check(error);
 }
 
 // ---------------------------------------------------------------------------
 // Media
 // ---------------------------------------------------------------------------
-export async function dbInsertMediaFile(file: MediaFile) {
+export async function dbInsertMediaFile(file: MediaFile, businessId: string) {
   const { error } = await supabase.from('media_files').insert({
     id: file.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     name: file.name,
     type: file.type,
     url: file.url,
@@ -329,10 +339,10 @@ export async function dbInsertMediaFile(file: MediaFile) {
 // ---------------------------------------------------------------------------
 // Attendance
 // ---------------------------------------------------------------------------
-export async function dbInsertAttendance(row: Attendance) {
+export async function dbInsertAttendance(row: Attendance, businessId: string) {
   const { error } = await supabase.from('attendance').insert({
     id: row.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     user_id: row.userId,
     date: row.date,
     check_in_time: row.checkInTime,
@@ -348,17 +358,17 @@ export async function dbUpdateAttendance(id: string, updates: Partial<Attendance
   if (updates.checkOutTime !== undefined) row.check_out_time = updates.checkOutTime;
   if (updates.workingHours !== undefined) row.working_hours = updates.workingHours;
   if (updates.status !== undefined) row.status = updates.status;
-  const { error } = await supabase.from('attendance').update(row).eq('id', id);
+  const { error } = await supabase.from('attendance').update(row as any).eq('id', id);
   check(error);
 }
 
 // ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
-export async function dbInsertNotification(notif: Notification) {
+export async function dbInsertNotification(notif: Notification, businessId: string) {
   const { error } = await supabase.from('notifications').insert({
     id: notif.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     user_id: notif.userId,
     title: notif.title,
     message: notif.message,
@@ -378,10 +388,10 @@ export async function dbMarkAllNotificationsRead(ids: string[]) {
 // ---------------------------------------------------------------------------
 // Daily worklogs
 // ---------------------------------------------------------------------------
-export async function dbInsertWorklog(log: DailyWorkLog) {
+export async function dbInsertWorklog(log: DailyWorkLog, businessId: string) {
   const { error } = await supabase.from('daily_worklogs').insert({
     id: log.id,
-    business_id: CURRENT_BUSINESS_ID,
+    business_id: businessId,
     user_id: log.userId,
     user_name: log.userName,
     date: log.date,
@@ -395,7 +405,7 @@ export async function dbInsertWorklog(log: DailyWorkLog) {
     const { error: attachError } = await supabase
       .from('daily_worklog_attachments')
       .insert(log.attachments.map((file) => ({
-        business_id: CURRENT_BUSINESS_ID,
+        business_id: businessId,
         daily_worklog_id: log.id,
         media_file_id: file.id
       })));

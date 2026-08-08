@@ -7,7 +7,10 @@ import type { Database } from "@/types/database";
 
 const TOOL_SCHEMA = process.env.NEXT_PUBLIC_TOOL_SCHEMA!;
 
-const COOKIE_DOMAIN = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined;
+const COOKIE_DOMAIN =
+  process.env.NODE_ENV === "production"
+    ? process.env.NEXT_PUBLIC_COOKIE_DOMAIN
+    : undefined;
 
 export async function createClient() {
   const cookieStore = await cookies();

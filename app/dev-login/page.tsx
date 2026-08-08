@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useRouter, notFound } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 /** Local development login. Hidden in production — real login lives on the portal. */
@@ -11,7 +11,11 @@ export default function DevLogin() {
   const router = useRouter();
 
   if (process.env.NODE_ENV === "production") {
-    notFound();
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-neutral-500">
+        Log in via the portal.
+      </div>
+    );
   }
 
   async function signIn() {

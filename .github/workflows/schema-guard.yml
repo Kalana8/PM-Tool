@@ -1,0 +1,34 @@
+name: schema-guard
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block DDL outside this tool's schema
+        run: |
+          if grep -riE '(create|alter|drop)[[:space:]]+(table|function|policy|view|index|trigger|schema)[[:space:]]+"?(public|crm|smm|auth|storage)"?\.' supabase/migrations/; then
+            echo "❌ A migration file touches a forbidden schema (public|crm|smm|auth|storage)."
+            echo "You may only modify your own tool's schema. See supabase/migrations/README.md"
+            exit 1
+          fi
+          echo "✅ Schema guard passed"
+
+      - name: Require RLS on every new table
+        run: |
+          FAIL=0
+          for f in $(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD -- supabase/migrations/ | grep '\.sql$' || true); do
+            TABLES=$(grep -ioE 'create table (if not exists )?[a-z_]+\.[a-z_]+' "$f" | grep -ioE '[a-z_]+\.[a-z_]+$' || true)
+            for t in $TABLES; do
+              if ! grep -qiE "alter table (if exists )?$t enable row level security" "$f"; then
+                echo "❌ $f creates $t but never enables RLS on it"
+                FAIL=1
+              fi
+            done
+          done
+          [ $FAIL -eq 0 ] && echo "✅ RLS check passed" || exit 1
