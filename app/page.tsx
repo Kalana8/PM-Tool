@@ -1,17 +1,17 @@
 import { getCurrentProfile } from "@/lib/get-current-profile";
 import { AppShell } from "@/components/app-shell";
-import { OmniWorkApp } from "@/components/omniwork-app";
+import { BizYepApp } from "@/components/bizyep-app";
 import { mapUser } from "@/lib/supabase/mappers";
 
 export default async function Home() {
   const { ctx, profile } = await getCurrentProfile();
 
-  // OmniWork renders its own full-page chrome (Sidebar + Header), so once a
+  // BizYep renders its own full-page chrome (Sidebar + Header), so once a
   // role is assigned it's rendered standalone rather than nested inside
   // AppShell's own sidebar/header — avoids a double shell. AppShell is only
   // used for the simpler pending/no-business states below.
   if (profile?.role) {
-    return <OmniWorkApp initialProfile={mapUser(profile)} businessId={ctx!.businessId!} />;
+    return <BizYepApp initialProfile={mapUser(profile)} businessId={ctx!.businessId!} />;
   }
 
   return (

@@ -80,7 +80,7 @@ export default function Sidebar({
           <line x1="9" x2="9" y1="21" y2="9"/>
         </svg>
         {!collapsed && (
-          <span className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-slate-50">OMNIWORK</span>
+          <span className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-slate-50">BizYep</span>
         )}
       </div>
 
@@ -89,12 +89,11 @@ export default function Sidebar({
         id="sidebar-collapse-toggle"
         onClick={onToggleCollapsed}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className={`flex items-center gap-2 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-900 transition-colors cursor-pointer ${
-          collapsed ? 'justify-center px-2' : 'px-6'
+        className={`flex items-center justify-end py-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-900 transition-colors cursor-pointer ${
+          collapsed ? 'px-2' : 'px-4'
         }`}
       >
         {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
-        {!collapsed && <span>Collapse</span>}
       </button>
 
       {/* User Role Badge */}

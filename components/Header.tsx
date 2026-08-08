@@ -57,7 +57,7 @@ export default function Header({
       {/* Breadcrumbs & View Title */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors cursor-pointer" onClick={() => onNavigate('Dashboard')}>
-          OmniWork
+          BizYep
         </span>
         <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-700" />
         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">

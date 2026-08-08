@@ -77,12 +77,12 @@ function FullScreenMessage({ icon, title }: { icon: React.ReactNode; title: stri
 }
 
 /**
- * The ported OmniWork app, minus everything that used to be its own
+ * The ported BizYep app, minus everything that used to be its own
  * session/login/pending-approval machinery — the host's server component
  * (app/page.tsx) resolves the signed-in user's pm.users profile via
  * getCurrentProfile() and only mounts this once profile.role is non-null.
  */
-export function OmniWorkApp({ initialProfile, businessId }: { initialProfile: User; businessId: string }) {
+export function BizYepApp({ initialProfile, businessId }: { initialProfile: User; businessId: string }) {
   const [currentUser] = useState<User>(initialProfile);
   const [data, setData] = useState<AppData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
