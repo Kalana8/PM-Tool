@@ -1,6 +1,7 @@
 import { getCurrentProfile } from "@/lib/get-current-profile";
 import { AppShell } from "@/components/app-shell";
 import { BizYepApp } from "@/components/bizyep-app";
+import { ChangePasswordGate } from "@/components/ChangePasswordGate";
 import { mapUser } from "@/lib/supabase/mappers";
 
 export default async function Home() {
@@ -10,8 +11,21 @@ export default async function Home() {
   // role is assigned it's rendered standalone rather than nested inside
   // AppShell's own sidebar/header — avoids a double shell. AppShell is only
   // used for the simpler pending/no-business states below.
-  if (profile?.role) {
-    return <BizYepApp initialProfile={mapUser(profile)} businessId={ctx!.businessId!} />;
+  if (profile?.role_id) {
+    // Every admin-created/reset password is temporary — block the app until
+    // the employee sets their own (supabase/migrations/0007_pm_password_reset_flow.sql).
+    if (profile.must_change_password) {
+      return <ChangePasswordGate userId={profile.id} name={profile.name} />;
+    }
+
+    return (
+      <BizYepApp
+        initialProfile={mapUser(profile)}
+        businessId={ctx!.businessId!}
+        businessSlug={ctx!.business?.slug ?? null}
+        businessName={ctx!.business?.name ?? null}
+      />
+    );
   }
 
   return (

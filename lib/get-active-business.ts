@@ -14,7 +14,7 @@ export async function getActiveBusiness() {
   const { data } = await supabase
     .schema("public")
     .from("business_members")
-    .select("business_id, role, businesses(id, name, logo_url)")
+    .select("business_id, role, businesses(id, name, logo_url, slug)")
     .eq("user_id", user.id)
     .limit(1)
     .single();

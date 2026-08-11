@@ -21,16 +21,33 @@ export async function getCurrentProfile() {
   const supabase = (await createClient()) as unknown as SupabaseClient<Database, "pm">;
   const { data: existing } = await supabase
     .from("users")
-    .select("*")
+    .select("*, roles(id, name, base_level, permissions)")
     .eq("auth_id", ctx.user.id)
     .eq("business_id", ctx.businessId)
     .maybeSingle();
 
   if (existing) return { ctx, profile: existing };
 
+  // Roles are seeded lazily on first visit rather than by a DB trigger,
+  // since businesses created before the roles table existed (and any new
+  // one) need their 3 system roles created before anyone can be assigned
+  // one — see supabase/migrations/0004_pm_roles_and_permissions.sql.
+  await supabase.rpc("ensure_system_roles", { p_business_id: ctx.businessId });
+
   // The business owner is auto-provisioned as Admin (they own the workspace
-  // in the lobby already); everyone else lands in the role=null pending
+  // in the lobby already); everyone else lands in the role_id=null pending
   // state until an existing Admin categorizes them.
+  let roleId: string | null = null;
+  if (ctx.role === "owner") {
+    const { data: adminRole } = await supabase
+      .from("roles")
+      .select("id")
+      .eq("business_id", ctx.businessId)
+      .eq("base_level", "admin")
+      .single();
+    roleId = adminRole?.id ?? null;
+  }
+
   const { data: created, error } = await supabase
     .from("users")
     .insert({
@@ -39,9 +56,9 @@ export async function getCurrentProfile() {
       auth_id: ctx.user.id,
       name: ctx.user.email ?? "New user",
       email: ctx.user.email ?? `${ctx.user.id}@unknown`,
-      role: ctx.role === "owner" ? "Admin" : null,
+      role_id: roleId,
     })
-    .select()
+    .select("*, roles(id, name, base_level, permissions)")
     .single();
 
   if (error) throw error;

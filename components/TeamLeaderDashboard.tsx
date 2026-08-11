@@ -17,6 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { User, Project, Task, Attendance, TaskSubmission } from '../lib/types';
+import { todayISODate } from '../lib/date';
 
 interface TeamLeaderDashboardProps {
   currentUser: User;
@@ -76,8 +77,8 @@ export default function TeamLeaderDashboard({
     });
   });
 
-  // Team attendance today (2026-07-07)
-  const todayStr = '2026-07-07';
+  // Team attendance today
+  const todayStr = todayISODate();
   const myTodayAttendance = attendance.find((a) => a.userId === currentUser.id && a.date === todayStr);
   const teamAttendanceToday = teamMembers.map((member) => {
     const att = attendance.find((a) => a.userId === member.id && a.date === todayStr);
@@ -214,7 +215,7 @@ export default function TeamLeaderDashboard({
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">
             {teamProjects.length} Initiatives
           </p>
-          <span className="text-[10px] text-gray-400">Active portfolios inside your SBU.</span>
+          <span className="text-[10px] text-gray-400">Active portfolios inside your department.</span>
         </div>
       </div>
 
@@ -408,7 +409,7 @@ export default function TeamLeaderDashboard({
       <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
           <div>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Initiatives Under SBU</h3>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Initiatives Under Department</h3>
             <p className="text-[10px] text-gray-400">Direct active project track.</p>
           </div>
           <button

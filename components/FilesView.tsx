@@ -84,7 +84,7 @@ export default function FilesView({
               {isUploading ? (
                 <div className="space-y-2 flex flex-col items-center">
                   <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-                  <span className="text-[10px] text-blue-500 font-semibold">Uploading to SBU CDN...</span>
+                  <span className="text-[10px] text-blue-500 font-semibold">Uploading to Department CDN...</span>
                 </div>
               ) : (
                 <div className="space-y-2 flex flex-col items-center">
@@ -124,14 +124,14 @@ export default function FilesView({
           </div>
 
           <div className="border-t border-gray-100 dark:border-gray-900 pt-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">SBU Classification</h3>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">Department Classification</h3>
             <select
               id="file-dept-select"
               value={selectedDeptFilter}
               onChange={(e) => setSelectedDeptFilter(e.target.value)}
               className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="all">All SBUs</option>
+              <option value="all">All Departments</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
@@ -182,7 +182,7 @@ export default function FilesView({
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-900/60 flex items-center justify-between text-[9px] text-gray-400">
-                      <span>By {file.uploadedBy.split(' ')[0]} • SBU: {dept?.code || 'WEB'}</span>
+                      <span>By {file.uploadedBy.split(' ')[0]} • Department: {dept?.code || 'WEB'}</span>
                       <a
                         href={file.url}
                         download

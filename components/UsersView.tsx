@@ -17,36 +17,53 @@ import {
   Mail,
   FolderLock,
   UserCheck,
-  Clock
+  Clock,
+  Copy,
+  Check
 } from 'lucide-react';
-import { User, Department, UserRole, PendingUser } from '../lib/types';
+import { User, Department, Role, RoleBaseLevel, PendingUser } from '../lib/types';
+import { hasAction } from '../lib/permissions';
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 
 interface UsersViewProps {
   users: User[];
   departments: Department[];
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  roles: Role[];
+  userRole: RoleBaseLevel;
+  currentUser: User;
   currentUserId?: string;
-  onAddUser: (user: Omit<User, 'id' | 'performanceScore'>) => void;
+  onAddUser: (user: Omit<User, 'id' | 'performanceScore' | 'roleName' | 'baseLevel' | 'permissions'>) => void;
   onToggleUserStatus: (userId: string) => void;
   pendingUsers?: PendingUser[];
   onCategorizeUser?: (
     pendingUserId: string,
-    updates: { role: UserRole; departmentId: string; title: string; teamLeaderId?: string }
+    updates: { roleId: string; departmentId: string; title: string; teamLeaderId?: string }
   ) => void;
   onDeclineUser?: (pendingUserId: string) => void;
   onEditUser?: (
     userId: string,
-    updates: { name: string; title: string; role: UserRole; departmentId: string; teamLeaderId?: string }
+    updates: { name: string; title: string; roleId: string; departmentId: string; teamLeaderId?: string }
   ) => void;
   onSendPasswordReset?: (email: string) => void;
-  onAddUserWithPassword?: (user: Omit<User, 'id' | 'performanceScore'>, password: string) => void;
+  onResetPassword?: (userId: string, newPassword: string) => Promise<boolean>;
+  onAddUserWithPassword?: (
+    user: Omit<User, 'id' | 'performanceScore' | 'roleName' | 'baseLevel' | 'permissions'>,
+    password: string
+  ) => void;
   onDeleteUser?: (userId: string) => void;
+  credentialUserIds: string[];
+  onViewCredentials?: (userId: string) => Promise<{ email: string; password: string } | null>;
+  businessSlug: string | null;
+  onSendTaskSummaryEmail?: (userId: string) => Promise<boolean>;
 }
 
 export default function UsersView({
   users,
   departments,
+  roles,
   userRole,
+  currentUser,
   currentUserId,
   onAddUser,
   onToggleUserStatus,
@@ -55,13 +72,52 @@ export default function UsersView({
   onDeclineUser,
   onEditUser,
   onSendPasswordReset,
+  onResetPassword,
   onAddUserWithPassword,
-  onDeleteUser
+  onDeleteUser,
+  credentialUserIds,
+  onViewCredentials,
+  businessSlug,
+  onSendTaskSummaryEmail
 }: UsersViewProps) {
+  const loginUrl = SITE_URL && businessSlug ? `${SITE_URL}/${businessSlug}/user-login` : null;
+  const canSendTaskEmail = userRole === 'admin' || userRole === 'team_leader';
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [viewingCredsUserId, setViewingCredsUserId] = useState<string | null>(null);
+  const [credsLoading, setCredsLoading] = useState(false);
+  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<'link' | 'email' | 'password' | 'both' | null>(null);
+  const [sendingEmailUserId, setSendingEmailUserId] = useState<string | null>(null);
+
+  const handleSendTaskEmail = async (userId: string) => {
+    setSendingEmailUserId(userId);
+    await onSendTaskSummaryEmail?.(userId);
+    setSendingEmailUserId(null);
+  };
+
+  const openCredentials = async (userId: string) => {
+    setViewingCredsUserId(userId);
+    setCredsLoading(true);
+    setCreds(null);
+    const result = (await onViewCredentials?.(userId)) ?? null;
+    setCreds(result);
+    setCredsLoading(false);
+  };
+
+  const closeCredentials = () => {
+    setViewingCredsUserId(null);
+    setCreds(null);
+    setCopiedField(null);
+  };
+
+  const copyToClipboard = (field: 'link' | 'email' | 'password' | 'both', value: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField((prev) => (prev === field ? null : prev)), 1500);
+  };
   const [query, setQuery] = useState('');
   const [categorizingId, setCategorizingId] = useState<string | null>(null);
-  const [catRole, setCatRole] = useState<UserRole>('Team Member');
+  const [catRoleId, setCatRoleId] = useState('');
   const [catDepartmentId, setCatDepartmentId] = useState('');
   const [catTitle, setCatTitle] = useState('');
   const [catTeamLeaderId, setCatTeamLeaderId] = useState('');
@@ -69,14 +125,16 @@ export default function UsersView({
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editTitle, setEditTitle] = useState('');
-  const [editRole, setEditRole] = useState<UserRole>('Team Member');
+  const [editRoleId, setEditRoleId] = useState('');
   const [editDepartmentId, setEditDepartmentId] = useState('');
   const [editTeamLeaderId, setEditTeamLeaderId] = useState('');
+  const [resetPasswordDraft, setResetPasswordDraft] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('Team Member');
+  const [roleId, setRoleId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [title, setTitle] = useState('');
   const [phone, setPhone] = useState('');
@@ -85,27 +143,37 @@ export default function UsersView({
 
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
+  const canManageLogin = hasAction(currentUser, 'users.manage_login');
+
+  // A Team Leader may only add Team Member-tier roles onto their own team;
+  // nobody picks an Admin-tier role from this drawer (Categorize/Edit are
+  // the only Admin-only flows that can grant one — see below).
+  const addRoleOptions = roles.filter((r) =>
+    userRole === 'team_leader' ? r.baseLevel === 'team_member' : r.baseLevel !== 'admin'
+  );
+  const selectedAddRole = roles.find((r) => r.id === roleId);
+
   const handleAddUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !departmentId || !title.trim()) return;
-    if (userRole === 'Admin' && password.length < 6) return;
+    if (!name.trim() || !email.trim() || !departmentId || !title.trim() || !roleId) return;
+    if (canManageLogin && password.length < 6) return;
 
     const newUser = {
       name,
       email,
-      role,
+      roleId,
       departmentId,
       status: 'Active' as const,
       avatar: `https://picsum.photos/seed/${name.replace(' ', '')}/100/100`,
       title,
       phone,
       // Optional: a Team Member can be assigned a supervising Team Leader, or left unassigned
-      teamLeaderId: role === 'Team Member' && teamLeaderId ? teamLeaderId : undefined
+      teamLeaderId: selectedAddRole?.baseLevel === 'team_member' && teamLeaderId ? teamLeaderId : undefined
     };
 
-    // Admins set a password up front, which immediately creates a real login for the new
-    // employee. Team Leaders keep the existing profile-only flow (no login created yet).
-    if (userRole === 'Admin' && onAddUserWithPassword) {
+    // Admins (or any role with users.manage_login) set a password up front, which immediately
+    // creates a real login for the new employee. Everyone else keeps the profile-only flow.
+    if (canManageLogin && onAddUserWithPassword) {
       onAddUserWithPassword(newUser, password);
     } else {
       onAddUser(newUser);
@@ -126,74 +194,79 @@ export default function UsersView({
   // - A Team Leader sees only the Team Members assigned under them.
   // - A Team Member sees only the Team Leader supervising them.
   const scopedUsers =
-    userRole === 'Team Leader' && currentUserId
+    userRole === 'team_leader' && currentUserId
       ? users.filter((u) => u.teamLeaderId === currentUserId)
-      : userRole === 'Team Member' && currentUserId
+      : userRole === 'team_member' && currentUserId
       ? users.filter((u) => u.id === users.find((me) => me.id === currentUserId)?.teamLeaderId)
       : users;
 
   const teamLeaderOptions = users.filter(
-    (u) => u.role === 'Team Leader' && (!departmentId || u.departmentId === departmentId)
+    (u) => u.baseLevel === 'team_leader' && (!departmentId || u.departmentId === departmentId)
   );
 
   const catTeamLeaderOptions = users.filter(
-    (u) => u.role === 'Team Leader' && (!catDepartmentId || u.departmentId === catDepartmentId)
+    (u) => u.baseLevel === 'team_leader' && (!catDepartmentId || u.departmentId === catDepartmentId)
   );
 
   const openCategorize = (pendingUserId: string) => {
     setCategorizingId(pendingUserId);
-    setCatRole('Team Member');
+    setCatRoleId(roles.find((r) => r.baseLevel === 'team_member')?.id || roles[0]?.id || '');
     setCatDepartmentId('');
     setCatTitle('');
     setCatTeamLeaderId('');
   };
 
+  const selectedCatRole = roles.find((r) => r.id === catRoleId);
+
   const handleCategorizeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!categorizingId || !catDepartmentId || !catTitle.trim() || !onCategorizeUser) return;
+    if (!categorizingId || !catDepartmentId || !catTitle.trim() || !catRoleId || !onCategorizeUser) return;
 
     onCategorizeUser(categorizingId, {
-      role: catRole,
+      roleId: catRoleId,
       departmentId: catDepartmentId,
       title: catTitle,
-      teamLeaderId: catRole === 'Team Member' && catTeamLeaderId ? catTeamLeaderId : undefined
+      teamLeaderId: selectedCatRole?.baseLevel === 'team_member' && catTeamLeaderId ? catTeamLeaderId : undefined
     });
     setCategorizingId(null);
   };
 
   const editTeamLeaderOptions = users.filter(
-    (u) => u.role === 'Team Leader' && u.id !== editingUserId && (!editDepartmentId || u.departmentId === editDepartmentId)
+    (u) => u.baseLevel === 'team_leader' && u.id !== editingUserId && (!editDepartmentId || u.departmentId === editDepartmentId)
   );
+
+  const selectedEditRole = roles.find((r) => r.id === editRoleId);
 
   const openEdit = (targetUser: User) => {
     setEditingUserId(targetUser.id);
     setEditName(targetUser.name);
     setEditTitle(targetUser.title);
-    setEditRole(targetUser.role);
+    setEditRoleId(targetUser.roleId);
     setEditDepartmentId(targetUser.departmentId);
     setEditTeamLeaderId(targetUser.teamLeaderId || '');
+    setResetPasswordDraft('');
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUserId || !editName.trim() || !editDepartmentId || !editTitle.trim() || !onEditUser) return;
+    if (!editingUserId || !editName.trim() || !editDepartmentId || !editTitle.trim() || !editRoleId || !onEditUser) return;
 
     onEditUser(editingUserId, {
       name: editName,
       title: editTitle,
-      role: editRole,
+      roleId: editRoleId,
       departmentId: editDepartmentId,
-      teamLeaderId: editRole === 'Team Member' && editTeamLeaderId ? editTeamLeaderId : undefined
+      teamLeaderId: selectedEditRole?.baseLevel === 'team_member' && editTeamLeaderId ? editTeamLeaderId : undefined
     });
     setEditingUserId(null);
   };
 
   const directoryTitle =
-    userRole === 'Team Leader' ? 'My Team' : userRole === 'Team Member' ? 'My Team Leader' : 'Personnel Directory';
+    userRole === 'team_leader' ? 'My Team' : userRole === 'team_member' ? 'My Team Leader' : 'Personnel Directory';
   const directorySubtitle =
-    userRole === 'Team Leader'
+    userRole === 'team_leader'
       ? 'Team Members currently assigned under your supervision.'
-      : userRole === 'Team Member'
+      : userRole === 'team_member'
       ? 'The Team Leader supervising your work.'
       : 'Create, configure, and monitor all organizational Team Leaders and Team Member accounts.';
 
@@ -204,15 +277,18 @@ export default function UsersView({
       u.title.toLowerCase().includes(query.toLowerCase())
   );
 
-  // Team Members cannot add employees; Team Leaders may only add Team Members onto their own team.
-  const canAddEmployee = userRole === 'Admin' || userRole === 'Team Leader';
+  const canAddEmployee = hasAction(currentUser, 'users.add');
+  const canEditUsers = hasAction(currentUser, 'users.edit');
+  const canDeleteUsers = hasAction(currentUser, 'users.delete');
   const currentUserRecord = users.find((u) => u.id === currentUserId);
 
   const handleOpenAdd = () => {
-    if (userRole === 'Team Leader') {
-      setRole('Team Member');
+    if (userRole === 'team_leader') {
+      setRoleId(addRoleOptions.find((r) => r.baseLevel === 'team_member')?.id || '');
       setDepartmentId(currentUserRecord?.departmentId || '');
       setTeamLeaderId(currentUserId || '');
+    } else {
+      setRoleId(addRoleOptions[0]?.id || '');
     }
     setIsAddUserOpen(true);
   };
@@ -243,7 +319,7 @@ export default function UsersView({
       </div>
 
       {/* Pending Approvals: new signups awaiting an Admin to assign their role/department */}
-      {userRole === 'Admin' && pendingUsers.length > 0 && (
+      {userRole === 'admin' && pendingUsers.length > 0 && (
         <div id="pending-approvals-panel" className="rounded-2xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10 p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-amber-600" />
@@ -306,7 +382,7 @@ export default function UsersView({
             <thead className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-900">
               <tr>
                 <th className="py-2.5">Staff Employee</th>
-                <th className="py-2.5">Business SBU</th>
+                <th className="py-2.5">Department</th>
                 <th className="py-2.5">Title & Role</th>
                 <th className="py-2.5">Reports To</th>
                 <th className="py-2.5">Contact parameters</th>
@@ -327,11 +403,12 @@ export default function UsersView({
                         <div>
                           <p className="font-bold text-gray-950 dark:text-gray-100 leading-tight">{u.name}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">UID: {u.id}</p>
+                          {u.employeeCode && <p className="text-[10px] text-gray-400 mt-0.5">Employee Code: {u.employeeCode}</p>}
                         </div>
                       </div>
                     </td>
 
-                    {/* SBU */}
+                    {/* Department */}
                     <td className="py-3.5">
                       <span className="font-semibold text-gray-800 dark:text-gray-200">{dept?.name}</span>
                       <p className="text-[10px] text-gray-400 font-mono mt-0.5">{dept?.code}</p>
@@ -341,7 +418,7 @@ export default function UsersView({
                     <td className="py-3.5">
                       <p className="font-medium text-gray-800 dark:text-gray-200">{u.title}</p>
                       <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mt-0.5 block">
-                        {u.role}
+                        {u.roleName}
                       </span>
                     </td>
 
@@ -398,7 +475,28 @@ export default function UsersView({
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        {userRole === 'Admin' && (
+                        {canSendTaskEmail && (
+                          <button
+                            id={`send-task-email-btn-${u.id}`}
+                            onClick={() => handleSendTaskEmail(u.id)}
+                            disabled={sendingEmailUserId === u.id}
+                            className="rounded-lg p-1.5 border border-gray-100 hover:bg-gray-50 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                            title="Email task summary to this employee"
+                          >
+                            <Mail className="h-4 w-4" />
+                          </button>
+                        )}
+                        {credentialUserIds.includes(u.id) && canManageLogin && (
+                          <button
+                            id={`view-credentials-btn-${u.id}`}
+                            onClick={() => openCredentials(u.id)}
+                            className="rounded-lg p-1.5 border border-gray-100 hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                            title="View login credentials"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canEditUsers && (
                           <button
                             id={`edit-user-btn-${u.id}`}
                             onClick={() => openEdit(u)}
@@ -408,7 +506,7 @@ export default function UsersView({
                             <Edit2 className="h-4 w-4" />
                           </button>
                         )}
-                        {userRole === 'Admin' && (
+                        {canDeleteUsers && (
                           <button
                             id={`delete-user-btn-${u.id}`}
                             onClick={() => {
@@ -486,7 +584,7 @@ export default function UsersView({
                   />
                 </div>
 
-                {userRole === 'Admin' && (
+                {canManageLogin && (
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Login Password</label>
                     <input
@@ -509,34 +607,36 @@ export default function UsersView({
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold font-semibold">Security Role</label>
                     <select
                       id="user-role-select"
-                      value={role}
-                      disabled={userRole === 'Team Leader'}
+                      value={roleId}
+                      disabled={userRole === 'team_leader'}
                       onChange={(e) => {
-                        const nextRole = e.target.value as UserRole;
-                        setRole(nextRole);
-                        if (nextRole !== 'Team Member') setTeamLeaderId('');
+                        const nextRoleId = e.target.value;
+                        setRoleId(nextRoleId);
+                        const nextRole = roles.find((r) => r.id === nextRoleId);
+                        if (nextRole?.baseLevel !== 'team_member') setTeamLeaderId('');
                       }}
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <option value="Team Member">Team Member</option>
-                      <option value="Team Leader">Team Leader</option>
+                      {addRoleOptions.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
                     </select>
-                    {userRole === 'Team Leader' && (
+                    {userRole === 'team_leader' && (
                       <p className="text-[9px] text-gray-400 mt-1">Team Leaders may only add Team Members.</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold font-semibold">Department SBU</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold font-semibold">Department</label>
                     <select
                       id="user-department-select"
                       required
                       value={departmentId}
-                      disabled={userRole === 'Team Leader'}
+                      disabled={userRole === 'team_leader'}
                       onChange={(e) => setDepartmentId(e.target.value)}
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select SBU</option>
+                      <option value="">Select Department</option>
                       {departments.map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
@@ -544,7 +644,7 @@ export default function UsersView({
                   </div>
                 </div>
 
-                {role === 'Team Member' && (
+                {selectedAddRole?.baseLevel === 'team_member' && (
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">
                       Supervising Team Leader (Optional)
@@ -552,7 +652,7 @@ export default function UsersView({
                     <select
                       id="user-teamleader-select"
                       value={teamLeaderId}
-                      disabled={userRole === 'Team Leader'}
+                      disabled={userRole === 'team_leader'}
                       onChange={(e) => setTeamLeaderId(e.target.value)}
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -561,7 +661,7 @@ export default function UsersView({
                         <option key={tl.id} value={tl.id}>{tl.name} ({tl.title})</option>
                       ))}
                     </select>
-                    {userRole === 'Team Leader' && (
+                    {userRole === 'team_leader' && (
                       <p className="text-[9px] text-gray-400 mt-1">Assigned to you automatically.</p>
                     )}
                   </div>
@@ -639,22 +739,23 @@ export default function UsersView({
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Security Role</label>
                     <select
                       id="categorize-role-select"
-                      value={catRole}
+                      value={catRoleId}
                       onChange={(e) => {
-                        const nextRole = e.target.value as UserRole;
-                        setCatRole(nextRole);
-                        if (nextRole !== 'Team Member') setCatTeamLeaderId('');
+                        const nextRoleId = e.target.value;
+                        setCatRoleId(nextRoleId);
+                        const nextRole = roles.find((r) => r.id === nextRoleId);
+                        if (nextRole?.baseLevel !== 'team_member') setCatTeamLeaderId('');
                       }}
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="Team Member">Team Member</option>
-                      <option value="Team Leader">Team Leader</option>
-                      <option value="Admin">Admin</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department SBU</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</label>
                     <select
                       id="categorize-department-select"
                       required
@@ -662,7 +763,7 @@ export default function UsersView({
                       onChange={(e) => setCatDepartmentId(e.target.value)}
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="">Select SBU</option>
+                      <option value="">Select Department</option>
                       {departments.map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
@@ -670,7 +771,7 @@ export default function UsersView({
                   </div>
                 </div>
 
-                {catRole === 'Team Member' && (
+                {selectedCatRole?.baseLevel === 'team_member' && (
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">
                       Supervising Team Leader (Optional)
@@ -763,22 +864,23 @@ export default function UsersView({
                       <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Security Role</label>
                       <select
                         id="edit-role-select"
-                        value={editRole}
+                        value={editRoleId}
                         onChange={(e) => {
-                          const nextRole = e.target.value as UserRole;
-                          setEditRole(nextRole);
-                          if (nextRole !== 'Team Member') setEditTeamLeaderId('');
+                          const nextRoleId = e.target.value;
+                          setEditRoleId(nextRoleId);
+                          const nextRole = roles.find((r) => r.id === nextRoleId);
+                          if (nextRole?.baseLevel !== 'team_member') setEditTeamLeaderId('');
                         }}
                         className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
-                        <option value="Team Member">Team Member</option>
-                        <option value="Team Leader">Team Leader</option>
-                        <option value="Admin">Admin</option>
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department SBU</label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</label>
                       <select
                         id="edit-department-select"
                         required
@@ -786,7 +888,7 @@ export default function UsersView({
                         onChange={(e) => setEditDepartmentId(e.target.value)}
                         className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
-                        <option value="">Select SBU</option>
+                        <option value="">Select Department</option>
                         {departments.map((d) => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
@@ -794,7 +896,7 @@ export default function UsersView({
                     </div>
                   </div>
 
-                  {editRole === 'Team Member' && (
+                  {selectedEditRole?.baseLevel === 'team_member' && (
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">
                         Supervising Team Leader (Optional)
@@ -826,19 +928,51 @@ export default function UsersView({
                   </div>
                 </form>
 
-                {editingUser && (
-                  <div className="rounded-xl border border-gray-100 dark:border-gray-900 p-4 space-y-2">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Password</label>
-                    <p className="text-[10px] text-gray-400">{editingUser.email}</p>
-                    <button
-                      id="send-password-reset-btn"
-                      type="button"
-                      onClick={() => onSendPasswordReset?.(editingUser.email)}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 py-2 text-xs font-bold"
-                    >
-                      <KeyRound className="h-3.5 w-3.5" />
-                      Send Password Reset Email
-                    </button>
+                {editingUser && canManageLogin && (
+                  <div className="rounded-xl border border-gray-100 dark:border-gray-900 p-4 space-y-3">
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Password</label>
+                      <p className="text-[10px] text-gray-400">{editingUser.email}</p>
+                      <button
+                        id="send-password-reset-btn"
+                        type="button"
+                        onClick={() => onSendPasswordReset?.(editingUser.email)}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 py-2 text-xs font-bold"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Send Password Reset Email
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 border-t border-gray-100 dark:border-gray-900 pt-3">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reset Password Directly</label>
+                      <p className="text-[9px] text-gray-400">Sets a temporary password immediately — the employee must set their own on next login.</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="reset-password-input"
+                          type="password"
+                          minLength={6}
+                          placeholder="New temporary password"
+                          value={resetPasswordDraft}
+                          onChange={(e) => setResetPasswordDraft(e.target.value)}
+                          className="flex-1 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          id="reset-password-btn"
+                          type="button"
+                          disabled={resettingPassword || resetPasswordDraft.trim().length < 6}
+                          onClick={async () => {
+                            setResettingPassword(true);
+                            const ok = await onResetPassword?.(editingUser.id, resetPasswordDraft.trim());
+                            setResettingPassword(false);
+                            if (ok) setResetPasswordDraft('');
+                          }}
+                          className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs font-bold disabled:opacity-60"
+                        >
+                          {resettingPassword ? 'Resetting...' : 'Reset'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -878,7 +1012,7 @@ export default function UsersView({
                   <img src={viewedUser.avatar} alt={viewedUser.name} className="h-11 w-11 rounded-full object-cover" />
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">{viewedUser.name}</h3>
-                    <p className="text-[10px] text-blue-600 font-semibold">{viewedUser.role}</p>
+                    <p className="text-[10px] text-blue-600 font-semibold">{viewedUser.roleName}</p>
                   </div>
                 </div>
                 <button
@@ -923,6 +1057,12 @@ export default function UsersView({
                   <dt className="text-gray-400 font-semibold">UID</dt>
                   <dd className="text-gray-400 font-mono text-right">{viewedUser.id}</dd>
                 </div>
+                {viewedUser.employeeCode && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-400 font-semibold">Employee Code</dt>
+                    <dd className="text-gray-800 dark:text-gray-200 font-mono text-right">{viewedUser.employeeCode}</dd>
+                  </div>
+                )}
               </dl>
 
               <div className="flex justify-end pt-5">
@@ -938,6 +1078,125 @@ export default function UsersView({
           </div>
         );
       })()}
+
+      {/* View Login Credentials Modal */}
+      {viewingCredsUserId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-2xl border border-gray-100 dark:border-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-blue-500" />
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Login Credentials</h3>
+              </div>
+              <button
+                id="close-credentials-btn"
+                onClick={closeCredentials}
+                className="rounded-lg p-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-650"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            {credsLoading && <p className="text-xs text-gray-400 text-center py-4">Loading...</p>}
+
+            {!credsLoading && !creds && (
+              <p className="text-xs text-gray-400 text-center py-4">Failed to load credentials.</p>
+            )}
+
+            {!credsLoading && creds && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Login Link</label>
+                  {loginUrl ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                      <a
+                        href={loginUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-xs text-blue-600 hover:underline truncate"
+                      >
+                        {loginUrl}
+                      </a>
+                      <button
+                        id="copy-link-btn"
+                        onClick={() => copyToClipboard('link', loginUrl)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Copy login link"
+                      >
+                        {copiedField === 'link' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 italic">Not available yet (this business has no login slug configured).</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Email</label>
+                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                    <span className="flex-1 text-xs text-gray-900 dark:text-gray-100 truncate">{creds.email}</span>
+                    <button
+                      id="copy-email-btn"
+                      onClick={() => copyToClipboard('email', creds.email)}
+                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Copy email"
+                    >
+                      {copiedField === 'email' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Password</label>
+                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                    <span className="flex-1 text-xs font-mono text-gray-900 dark:text-gray-100 truncate">{creds.password}</span>
+                    <button
+                      id="copy-password-btn"
+                      onClick={() => copyToClipboard('password', creds.password)}
+                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                      title="Copy password"
+                    >
+                      {copiedField === 'password' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  id="copy-both-btn"
+                  type="button"
+                  onClick={() =>
+                    copyToClipboard(
+                      'both',
+                      `${loginUrl ? `Login Link: ${loginUrl}\n` : ''}Email: ${creds.email}\nPassword: ${creds.password}`
+                    )
+                  }
+                  className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 py-2 text-xs font-bold"
+                >
+                  {copiedField === 'both' ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-500" />
+                      Copied All
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy All
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-5">
+              <button
+                id="close-credentials-btn-footer"
+                onClick={closeCredentials}
+                className="rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 text-gray-600 dark:text-gray-300 px-4 py-2 text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

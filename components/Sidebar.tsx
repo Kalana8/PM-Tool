@@ -10,6 +10,7 @@ import {
   BarChart3,
   Files,
   Users,
+  ShieldCheck,
   Settings,
   Bell,
   Clock,
@@ -17,7 +18,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
-import { Department } from '../lib/types';
+import { Department, User } from '../lib/types';
+import { hasPage } from '../lib/permissions';
 
 interface SidebarProps {
   currentView: string;
@@ -26,6 +28,7 @@ interface SidebarProps {
   selectedDeptId: string | null;
   onDeptSelect: (id: string | null) => void;
   userRole: string;
+  currentUser: User;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }
@@ -37,6 +40,7 @@ export default function Sidebar({
   selectedDeptId,
   onDeptSelect,
   userRole,
+  currentUser,
   collapsed,
   onToggleCollapsed
 }: SidebarProps) {
@@ -44,27 +48,34 @@ export default function Sidebar({
     {
       title: null,
       items: [
-        { name: 'Dashboard', icon: LayoutDashboard, views: ['Dashboard'] }
+        { name: 'Dashboard', icon: LayoutDashboard, views: ['Dashboard'], adminOnly: false }
       ]
     },
     {
       title: 'Project Management',
       items: [
-        { name: 'Departments', icon: FolderOpen, views: ['Departments'] },
-        { name: 'Tasks', icon: FileText, views: ['Tasks'] },
-        { name: 'Calendar', icon: CalendarDays, views: ['Calendar'] }
+        { name: 'Departments', icon: FolderOpen, views: ['Departments'], adminOnly: false },
+        { name: 'Tasks', icon: FileText, views: ['Tasks'], adminOnly: false },
+        { name: 'Calendar', icon: CalendarDays, views: ['Calendar'], adminOnly: false }
       ]
     },
     {
       title: 'HR Management',
       items: [
-        { name: 'Attendance', icon: Clock, views: ['Attendance'] },
-        { name: 'Users', icon: Users, views: ['Users'] },
-        { name: 'Reports', icon: BarChart3, views: ['Reports'] },
-        { name: 'Settings', icon: Settings, views: ['Settings'] }
+        { name: 'Attendance', icon: Clock, views: ['Attendance'], adminOnly: false },
+        { name: 'Users', icon: Users, views: ['Users'], adminOnly: false },
+        { name: 'User Roles', icon: ShieldCheck, views: ['Roles'], adminOnly: true },
+        { name: 'Reports', icon: BarChart3, views: ['Reports'], adminOnly: false },
+        { name: 'Settings', icon: Settings, views: ['Settings'], adminOnly: false }
       ]
     }
   ];
+
+  // "User Roles" is a hardcoded Admin-only capability (not a delegable
+  // permission — see supabase/migrations/0004_pm_roles_and_permissions.sql),
+  // everything else is gated by the current role's configured page list.
+  const isVisible = (item: { name: string; adminOnly: boolean }) =>
+    item.name === 'Dashboard' || (item.adminOnly ? currentUser.baseLevel === 'admin' : hasPage(currentUser, item.name));
 
   return (
     <aside
@@ -114,7 +125,10 @@ export default function Sidebar({
       {/* Navigation Links */}
       <div className="flex-1 overflow-y-auto py-4 space-y-1 scrollbar-thin">
         <nav className="space-y-4">
-          {sections.map((section, sIdx) => (
+          {sections.map((section, sIdx) => {
+            const visibleItems = section.items.filter(isVisible);
+            if (visibleItems.length === 0) return null;
+            return (
             <div key={sIdx} className="space-y-1.5">
               {section.title && !collapsed && (
                 <div className="px-6 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
@@ -122,14 +136,14 @@ export default function Sidebar({
                 </div>
               )}
               <div className="space-y-0.5">
-                {section.items.map((item) => {
+                {visibleItems.map((item) => {
                   const isActive = item.views.includes(currentView);
                   const Icon = item.icon;
                   return (
                     <button
                       key={item.name}
                       id={`sidebar-link-${item.name.toLowerCase()}`}
-                      onClick={() => onViewChange(item.name)}
+                      onClick={() => onViewChange(item.views[0])}
                       title={collapsed ? item.name : undefined}
                       className={`flex w-full items-center py-2.5 text-sm font-medium transition-all duration-200 border-r-3 ${
                         collapsed ? 'justify-center px-2' : 'gap-3 px-6'
@@ -146,7 +160,8 @@ export default function Sidebar({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Departments Filter Segment */}

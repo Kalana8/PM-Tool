@@ -16,6 +16,7 @@ import {
   Activity
 } from 'lucide-react';
 import { User, Project, Task, Attendance, Department } from '../lib/types';
+import { todayISODate } from '../lib/date';
 
 interface AdminDashboardProps {
   users: User[];
@@ -39,8 +40,8 @@ export default function AdminDashboard({
   const [selectedChartTab, setSelectedChartTab] = useState<'attendance' | 'tasks'>('attendance');
 
   // Basic stats calculators
-  const totalEmployees = users.filter(u => u.role === 'Team Member').length;
-  const activeLeaders = users.filter(u => u.role === 'Team Leader').length;
+  const totalEmployees = users.filter(u => u.baseLevel === 'team_member').length;
+  const activeLeaders = users.filter(u => u.baseLevel === 'team_leader').length;
   const totalProjects = projects.length;
   const completedProjects = projects.filter(p => p.status === 'Completed').length;
   const activeProjects = projects.filter(p => p.status === 'In Progress').length;
@@ -51,7 +52,7 @@ export default function AdminDashboard({
   const taskCompletionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Attendance stats for today
-  const todayStr = '2026-07-07';
+  const todayStr = todayISODate();
   const checkedInToday = attendance.filter(a => a.date === todayStr);
   const presentCount = checkedInToday.length;
   const lateCount = checkedInToday.filter(a => a.status === 'Late').length;
@@ -334,12 +335,12 @@ export default function AdminDashboard({
             </span>
           </div>
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            Distributed over {departments.length} strategic business units.
+            Distributed over {departments.length} departments.
           </p>
         </div>
       </div>
 
-      {/* Row: Interactive Custom Analytics Chart & SBU Overview */}
+      {/* Row: Interactive Custom Analytics Chart & Department Overview */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Chart Card */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm lg:col-span-2">
@@ -379,11 +380,11 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Department / SBU Card */}
+        {/* Department Card */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Strategic Units (SBUs)</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Departments</h3>
               <p className="text-[10px] text-gray-400">Department distribution stats.</p>
             </div>
             <button
@@ -451,7 +452,7 @@ export default function AdminDashboard({
               <thead className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-900">
                 <tr>
                   <th className="py-2.5">Portfolio Name</th>
-                  <th className="py-2.5">SBU</th>
+                  <th className="py-2.5">Department</th>
                   <th className="py-2.5">Progress</th>
                   <th className="py-2.5">Deadline</th>
                   <th className="py-2.5 text-right">Actions</th>

@@ -184,13 +184,31 @@ export type Database = {
         ]
       }
       users: {
-        Row: { id: string; business_id: string; auth_id: string | null; name: string; email: string; role: Database["pm"]["Enums"]["user_role"] | null; department_id: string | null; status: Database["pm"]["Enums"]["active_status"]; avatar: string; title: string; performance_score: number; phone: string | null; team_leader_id: string | null; created_at: string }
-        Insert: { id: string; business_id: string; auth_id?: string | null; name: string; email: string; role?: Database["pm"]["Enums"]["user_role"] | null; department_id?: string | null; status?: Database["pm"]["Enums"]["active_status"]; avatar?: string; title?: string; performance_score?: number; phone?: string | null; team_leader_id?: string | null; created_at?: string }
-        Update: { id?: string; business_id?: string; auth_id?: string | null; name?: string; email?: string; role?: Database["pm"]["Enums"]["user_role"] | null; department_id?: string | null; status?: Database["pm"]["Enums"]["active_status"]; avatar?: string; title?: string; performance_score?: number; phone?: string | null; team_leader_id?: string | null; created_at?: string }
+        Row: { id: string; business_id: string; auth_id: string | null; name: string; email: string; role_id: string | null; department_id: string | null; status: Database["pm"]["Enums"]["active_status"]; avatar: string; title: string; performance_score: number; phone: string | null; team_leader_id: string | null; employee_code: string | null; must_change_password: boolean; created_at: string }
+        Insert: { id: string; business_id: string; auth_id?: string | null; name: string; email: string; role_id?: string | null; department_id?: string | null; status?: Database["pm"]["Enums"]["active_status"]; avatar?: string; title?: string; performance_score?: number; phone?: string | null; team_leader_id?: string | null; employee_code?: string | null; must_change_password?: boolean; created_at?: string }
+        Update: { id?: string; business_id?: string; auth_id?: string | null; name?: string; email?: string; role_id?: string | null; department_id?: string | null; status?: Database["pm"]["Enums"]["active_status"]; avatar?: string; title?: string; performance_score?: number; phone?: string | null; team_leader_id?: string | null; employee_code?: string | null; must_change_password?: boolean; created_at?: string }
         Relationships: [
           { foreignKeyName: "users_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
           { foreignKeyName: "users_department_id_fkey"; columns: ["department_id"]; isOneToOne: false; referencedRelation: "departments"; referencedColumns: ["id"] },
           { foreignKeyName: "users_team_leader_id_fkey"; columns: ["team_leader_id"]; isOneToOne: false; referencedRelation: "users"; referencedColumns: ["id"] },
+          { foreignKeyName: "users_role_id_fkey"; columns: ["role_id"]; isOneToOne: false; referencedRelation: "roles"; referencedColumns: ["id"] },
+        ]
+      }
+      roles: {
+        Row: { id: string; business_id: string; name: string; base_level: Database["pm"]["Enums"]["role_base_level"]; is_system: boolean; permissions: Json; created_at: string }
+        Insert: { id: string; business_id: string; name: string; base_level: Database["pm"]["Enums"]["role_base_level"]; is_system?: boolean; permissions?: Json; created_at?: string }
+        Update: { id?: string; business_id?: string; name?: string; base_level?: Database["pm"]["Enums"]["role_base_level"]; is_system?: boolean; permissions?: Json; created_at?: string }
+        Relationships: [
+          { foreignKeyName: "roles_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+        ]
+      }
+      user_credentials: {
+        Row: { user_id: string; business_id: string; password: string; created_at: string }
+        Insert: { user_id: string; business_id: string; password: string; created_at?: string }
+        Update: { user_id?: string; business_id?: string; password?: string; created_at?: string }
+        Relationships: [
+          { foreignKeyName: "user_credentials_user_id_fkey"; columns: ["user_id"]; isOneToOne: true; referencedRelation: "users"; referencedColumns: ["id"] },
+          { foreignKeyName: "user_credentials_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
         ]
       }
       employee_projects: {
@@ -314,11 +332,13 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
-      current_app_role: { Args: Record<PropertyKey, never>; Returns: Database["pm"]["Enums"]["user_role"] }
+      current_app_base_level: { Args: Record<PropertyKey, never>; Returns: Database["pm"]["Enums"]["role_base_level"] }
+      current_app_has_action: { Args: { p_action: string }; Returns: boolean }
       current_app_user_id: { Args: Record<PropertyKey, never>; Returns: string }
+      ensure_system_roles: { Args: { p_business_id: string }; Returns: undefined }
     }
     Enums: {
-      user_role: "Admin" | "Team Leader" | "Team Member"
+      role_base_level: "admin" | "team_leader" | "team_member"
       active_status: "Active" | "Inactive"
       project_status: "Planning" | "In Progress" | "In Review" | "Completed"
       task_status: "Todo" | "In Progress" | "Review" | "Completed" | "Cancelled"
@@ -327,7 +347,7 @@ export type Database = {
       attendance_status: "Present" | "Late" | "Half Day" | "Absent"
       submission_status: "Pending" | "Approved" | "Changes Requested"
       media_type: "image" | "video" | "document"
-      notification_type: "task_assigned" | "task_completed" | "task_approved" | "task_rejected" | "new_project" | "attendance" | "deadline"
+      notification_type: "task_assigned" | "task_updated" | "task_completed" | "task_approved" | "task_rejected" | "new_project" | "attendance" | "deadline" | "password_reset_request"
     }
     CompositeTypes: { [_ in never]: never }
   }
@@ -456,7 +476,7 @@ export const Constants = {
   },
   pm: {
     Enums: {
-      user_role: ["Admin", "Team Leader", "Team Member"],
+      role_base_level: ["admin", "team_leader", "team_member"],
       active_status: ["Active", "Inactive"],
       project_status: ["Planning", "In Progress", "In Review", "Completed"],
       task_status: ["Todo", "In Progress", "Review", "Completed", "Cancelled"],
@@ -465,7 +485,7 @@ export const Constants = {
       attendance_status: ["Present", "Late", "Half Day", "Absent"],
       submission_status: ["Pending", "Approved", "Changes Requested"],
       media_type: ["image", "video", "document"],
-      notification_type: ["task_assigned", "task_completed", "task_approved", "task_rejected", "new_project", "attendance", "deadline"],
+      notification_type: ["task_assigned", "task_updated", "task_completed", "task_approved", "task_rejected", "new_project", "attendance", "deadline", "password_reset_request"],
     },
   },
 } as const

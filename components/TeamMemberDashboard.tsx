@@ -16,10 +16,12 @@ import {
   PlaySquare,
   FileSpreadsheet
 } from 'lucide-react';
-import { User, Project, Task, Attendance, DailyWorkLog, MediaFile } from '../lib/types';
+import { User, Project, Task, Attendance, DailyWorkLog, MediaFile, Department } from '../lib/types';
+import { todayISODate } from '../lib/date';
 
 interface TeamMemberDashboardProps {
   currentUser: User;
+  departments: Department[];
   projects: Project[];
   tasks: Task[];
   attendance: Attendance[];
@@ -32,6 +34,7 @@ interface TeamMemberDashboardProps {
 
 export default function TeamMemberDashboard({
   currentUser,
+  departments,
   projects,
   tasks,
   attendance,
@@ -41,6 +44,7 @@ export default function TeamMemberDashboard({
   onSubmitTaskWork,
   onNavigate
 }: TeamMemberDashboardProps) {
+  const myDepartment = departments.find((d) => d.id === currentUser.departmentId);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isSubmitLogOpen, setIsSubmitLogOpen] = useState(false);
   const [tasksDoneText, setTasksDoneText] = useState('');
@@ -69,7 +73,7 @@ export default function TeamMemberDashboard({
   const pendingTasks = myTasks.filter((t) => t.status !== 'Completed');
 
   // Today's attendance
-  const todayStr = '2026-07-07';
+  const todayStr = todayISODate();
   const todayAttendance = attendance.find(
     (a) => a.userId === currentUser.id && a.date === todayStr
   );
@@ -146,7 +150,7 @@ export default function TeamMemberDashboard({
               Welcome back, {currentUser.name}!
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed max-w-xl">
-              You are assigned to the <span className="font-semibold text-gray-800 dark:text-gray-200">Web Development</span> SBU. Review your direct deadlines, log your presence timestamps, and push your daily deliverables.
+              You are assigned to the <span className="font-semibold text-gray-800 dark:text-gray-200">{myDepartment?.name || 'no'}</span> department. Review your direct deadlines, log your presence timestamps, and push your daily deliverables.
             </p>
           </div>
 

@@ -9,6 +9,7 @@ import {
   Moon,
   Bookmark,
   ShieldCheck,
+  RefreshCw,
   LogOut
 } from 'lucide-react';
 import { User, Notification } from '../lib/types';
@@ -17,7 +18,7 @@ interface HeaderProps {
   currentView: string;
   selectedProjectName?: string;
   onSearchClick: () => void;
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  userRole: string;
   currentUser: User;
   notifications: Notification[];
   onMarkNotificationsRead: () => void;
@@ -161,11 +162,12 @@ export default function Header({
                     >
                       <div className={`mt-0.5 rounded-full p-1 ${
                         notif.type === 'task_assigned' ? 'bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600' :
+                        notif.type === 'task_updated' ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-600' :
                         notif.type === 'task_approved' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600' :
                         notif.type === 'task_rejected' ? 'bg-red-100 dark:bg-red-950/40 text-red-600' :
                         'bg-blue-100 dark:bg-blue-950/40 text-blue-600'
                       }`}>
-                        {notif.type === 'task_approved' ? <ShieldCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+                        {notif.type === 'task_approved' ? <ShieldCheck className="h-3 w-3" /> : notif.type === 'task_updated' ? <RefreshCw className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[11px] leading-tight truncate">{notif.title}</p>
