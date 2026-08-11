@@ -111,7 +111,10 @@ export function BizYepApp({
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('theme') === 'dark';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -129,7 +132,7 @@ export function BizYepApp({
     };
   }, []);
 
-  // Keyboard listener for Ctrl + K command palette + initial theme detection
+  // Keyboard listener for Ctrl + K command palette.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -139,16 +142,17 @@ export function BizYepApp({
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    const isDark = localStorage.getItem('theme') === 'dark';
-    setDarkMode(isDark);
-    if (isDark) {
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+    if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [darkMode]);
 
   const updateData = (newData: AppData) => {
     setData(newData);

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     auth_id: createdAuth.user.id,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role_id: user.roleId,
     department_id: user.departmentId,
     status: user.status,
     avatar: user.avatar,
