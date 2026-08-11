@@ -39,8 +39,15 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isDevLogin = request.nextUrl.pathname.startsWith("/dev-login");
+  // Per-company login (pm.bizyep.com.au/{slug}/user-login) — must stay
+  // reachable while signed out, same reasoning as the /dev-login exemption.
+  const isCompanyLogin = /^\/[^/]+\/user-login(\/|$)/.test(request.nextUrl.pathname);
+  // The self-service password reset API is called from that same signed-out
+  // login page — it must stay reachable too, or every reset attempt bounces
+  // through this same redirect before ever reaching the route handler.
+  const isForgotPasswordApi = /^\/api\/[^/]+\/forgot-password(\/|$)/.test(request.nextUrl.pathname);
 
-  if (!user && !isDevLogin) {
+  if (!user && !isDevLogin && !isCompanyLogin && !isForgotPasswordApi) {
     if (
       process.env.NODE_ENV === "development" ||
       !process.env.NEXT_PUBLIC_PORTAL_LOGIN_URL

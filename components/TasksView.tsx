@@ -3,8 +3,6 @@
 import React, { useState } from 'react';
 import {
   Plus,
-  Calendar,
-  Clock,
   X,
   ChevronDown,
   ChevronRight,
@@ -12,9 +10,12 @@ import {
   Trash2,
   Eye,
   Edit2,
-  Save
+  Mail,
+  Calendar,
+  Clock
 } from 'lucide-react';
-import { Task, User, Project, TaskStatus, TaskPriority, TaskCategory, Subtask } from '../lib/types';
+import { Task, User, Project, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
+import { hasAction } from '../lib/permissions';
 
 const STATUS_OPTIONS: TaskStatus[] = ['Todo', 'In Progress', 'Review', 'Completed', 'Cancelled'];
 const PRIORITY_OPTIONS: TaskPriority[] = ['High', 'Medium', 'Low'];
@@ -35,7 +36,8 @@ interface TasksViewProps {
   users: User[];
   admins: User[];
   projects: Project[];
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  userRole: RoleBaseLevel;
+  currentUser: User;
   currentUserId?: string;
   onAddTask: (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => void;
   onUpdateTask: (taskId: string, updates: Partial<Omit<Task, 'id' | 'comments' | 'submissions'>>) => void;
@@ -47,6 +49,7 @@ interface TasksViewProps {
   onDeleteSubtask: (taskId: string, subtaskId: string) => void;
   onReorderTasks: (orderedTaskIds: string[]) => void;
   onReorderSubtasks: (taskId: string, orderedSubtaskIds: string[]) => void;
+  onSendTaskSummaryEmail?: (userId: string) => Promise<boolean>;
 }
 
 export default function TasksView({
@@ -55,6 +58,7 @@ export default function TasksView({
   admins,
   projects,
   userRole,
+  currentUser,
   currentUserId,
   onAddTask,
   onUpdateTask,
@@ -65,11 +69,16 @@ export default function TasksView({
   onUpdateSubtask,
   onDeleteSubtask,
   onReorderTasks,
-  onReorderSubtasks
+  onReorderSubtasks,
+  onSendTaskSummaryEmail
 }: TasksViewProps) {
+  const canSendTaskEmail = userRole === 'admin' || userRole === 'team_leader';
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailUserId, setEmailUserId] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<TaskCategory>('daily');
-  const canEditProgress = userRole === 'Admin' || userRole === 'Team Leader';
+  const canEditProgress = hasAction(currentUser, 'tasks.edit_progress');
 
   // Subtasks: expand/collapse + inline "new subtask" draft per task
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
@@ -180,7 +189,7 @@ export default function TasksView({
     setDueDate('2026-07-15');
     setDueTime('18:00');
     setDueDays(7);
-    if (userRole === 'Team Member' && currentUserId) {
+    if (userRole === 'team_member' && currentUserId) {
       setAssignedTo(currentUserId);
     } else {
       setAssignedTo('');
@@ -207,13 +216,6 @@ export default function TasksView({
   const handleDeleteTaskClick = (task: Task) => {
     if (window.confirm(`Delete task "${task.name}"? This cannot be undone.`)) {
       onDeleteTask(task.id);
-    }
-  };
-
-  const handleSaveTaskClick = (task: Task) => {
-    const assignee = users.find((u) => u.id === task.assignedTo);
-    if (assignee) {
-      alert(`Email notification sent to ${assignee.name} (${assignee.email}) about task: "${task.name}"`);
     }
   };
 
@@ -257,11 +259,6 @@ export default function TasksView({
       });
     }
 
-    const assignee = users.find((u) => u.id === assignedTo);
-    if (assignee) {
-      alert(`Email notification sent to ${assignee.name} (${assignee.email}) about task: "${name}"`);
-    }
-
     setName('');
     setProjectId('');
     setDescription('');
@@ -280,6 +277,28 @@ export default function TasksView({
   };
 
   const filteredByCategoryTasks = tasks.filter((t) => t.category === activeCategory);
+
+  // Preview only — the email itself is regenerated server-side from fresh
+  // data when sent, this is just to show the admin/leader what's assigned
+  // before they commit to sending it.
+  const emailPreviewTasks = tasks.filter((t) => t.assignedTo === emailUserId);
+  const emailPreviewTaskIds = new Set(emailPreviewTasks.map((t) => t.id));
+  const emailPreviewExtraSubtasks = tasks.flatMap((t) =>
+    !emailPreviewTaskIds.has(t.id)
+      ? (t.subtasks ?? []).filter((s) => s.assignedTo === emailUserId).map((s) => ({ ...s, parentTaskName: t.name }))
+      : []
+  );
+
+  const handleSendEmail = async () => {
+    if (!emailUserId) return;
+    setEmailSending(true);
+    const ok = await onSendTaskSummaryEmail?.(emailUserId);
+    setEmailSending(false);
+    if (ok) {
+      setIsEmailModalOpen(false);
+      setEmailUserId('');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn" id="tasks-board-layout">
@@ -304,6 +323,20 @@ export default function TasksView({
             <Plus className="h-4 w-4" />
             New Task
           </button>
+
+          {canSendTaskEmail && (
+            <button
+              id="open-email-task-summary-btn"
+              onClick={() => {
+                setEmailUserId('');
+                setIsEmailModalOpen(true);
+              }}
+              className="flex items-center gap-1 rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Mail className="h-4 w-4" />
+              Email Task Summary
+            </button>
+          )}
         </div>
       </div>
 
@@ -359,14 +392,14 @@ export default function TasksView({
             {filteredByCategoryTasks.map((task) => {
               const proj = projects.find((p) => p.id === task.projectId);
               const taskAssigneeOptions = users.filter(
-                (u) => u.departmentId === task.departmentId && (u.role === 'Team Member' || u.role === 'Team Leader')
+                (u) => u.departmentId === task.departmentId && (u.baseLevel === 'team_member' || u.baseLevel === 'team_leader')
               );
               const subtasks = task.subtasks || [];
               const isExpanded = expandedTaskIds.has(task.id);
               const completedCount = subtasks.filter((s) => s.status === 'Completed').length;
               const subtaskOwnerOptions = Array.from(
                 new Map(
-                  [...admins, ...users.filter((u) => u.role === 'Team Leader' && u.departmentId === task.departmentId)]
+                  [...admins, ...users.filter((u) => u.baseLevel === 'team_leader' && u.departmentId === task.departmentId)]
                     .map((u) => [u.id, u])
                 ).values()
               );
@@ -476,14 +509,6 @@ export default function TasksView({
                   </td>
                   <td className="py-3.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
-                      <button
-                        id={`task-save-btn-${task.id}`}
-                        onClick={() => handleSaveTaskClick(task)}
-                        className="rounded-lg p-1.5 border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
-                        title="Save & notify assignee"
-                      >
-                        <Save className="h-3.5 w-3.5" />
-                      </button>
                       <button
                         id={`task-view-btn-${task.id}`}
                         onClick={() => setViewingTaskId(task.id)}
@@ -838,8 +863,8 @@ export default function TasksView({
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">Select Staff</option>
-                      {users.filter(u => u.role === 'Team Member' || u.role === 'Team Leader').map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                      {users.filter(u => u.baseLevel === 'team_member' || u.baseLevel === 'team_leader').map((u) => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                       ))}
                     </select>
                   </div>
@@ -1068,6 +1093,100 @@ export default function TasksView({
                 className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-xs font-semibold shadow-md shadow-blue-500/10"
               >
                 Edit Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Task Summary Modal */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-2xl border border-gray-100 dark:border-gray-900 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Email Task Summary</h3>
+                <p className="text-[10px] text-gray-400">Select a person to preview and email all their tasks and subtasks.</p>
+              </div>
+              <button
+                id="close-email-summary-modal"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="rounded-lg p-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-650"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto pr-1">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Person</label>
+                <select
+                  id="email-summary-user-select"
+                  value={emailUserId}
+                  onChange={(e) => setEmailUserId(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select a person...</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
+                  ))}
+                </select>
+              </div>
+
+              {emailUserId && (
+                emailPreviewTasks.length === 0 && emailPreviewExtraSubtasks.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">No tasks or subtasks assigned to this person.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {emailPreviewTasks.map((t) => (
+                      <div key={t.id} className="rounded-xl border border-gray-100 dark:border-gray-900 p-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-gray-900 dark:text-gray-100">{t.name}</p>
+                          <span className="text-[9px] font-bold text-gray-400 uppercase">{t.status} • {t.progress}%</span>
+                        </div>
+                        {(t.subtasks ?? []).length > 0 && (
+                          <ul className="mt-1.5 space-y-0.5 pl-3">
+                            {(t.subtasks ?? []).map((s) => (
+                              <li key={s.id} className="text-[10px] text-gray-500 dark:text-gray-400">
+                                ↳ {s.name} <span className="text-gray-400">— {s.status}, {s.progress}%</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                    {emailPreviewExtraSubtasks.length > 0 && (
+                      <div className="rounded-xl border border-gray-100 dark:border-gray-900 p-3">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Additional Subtasks</p>
+                        <ul className="space-y-0.5">
+                          {emailPreviewExtraSubtasks.map((s) => (
+                            <li key={s.id} className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {s.name} <span className="text-gray-400">(under &quot;{s.parentTaskName}&quot;) — {s.status}, {s.progress}%</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-900 pt-4 mt-4">
+              <button
+                id="cancel-email-summary-btn"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 text-gray-600 dark:text-gray-300 px-4 py-2 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                id="send-email-summary-btn"
+                onClick={handleSendEmail}
+                disabled={!emailUserId || emailSending}
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-xs font-bold shadow-md shadow-blue-500/10 disabled:opacity-60"
+              >
+                {emailSending ? 'Sending...' : 'Send Email'}
               </button>
             </div>
           </div>

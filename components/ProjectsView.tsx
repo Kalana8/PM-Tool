@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   Briefcase,
   Calendar,
+  Clock,
   Users,
   CheckCircle2,
   FileText,
@@ -20,7 +21,8 @@ import {
   X,
   Play
 } from 'lucide-react';
-import { Project, User, Task, MediaFile, TaskComment } from '../lib/types';
+import { Project, User, Task, TaskCategory, MediaFile, TaskComment, RoleBaseLevel } from '../lib/types';
+import { hasAction } from '../lib/permissions';
 
 const PROJECT_STATUS_OPTIONS: Project['status'][] = ['Planning', 'In Progress', 'In Review', 'Completed'];
 
@@ -30,7 +32,8 @@ interface ProjectsViewProps {
   tasks: Task[];
   media: MediaFile[];
   selectedProjectId: string | null;
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  userRole: RoleBaseLevel;
+  currentUser: User;
   onProjectSelect: (id: string | null) => void;
   onAddComment: (projectId: string, text: string) => void;
   onUpdateProjectStatus: (projectId: string, status: Project['status']) => void;
@@ -47,14 +50,16 @@ export default function ProjectsView({
   media,
   selectedProjectId,
   userRole,
+  currentUser,
   onProjectSelect,
   onAddComment,
   onUpdateProjectStatus,
   onUpdateProjectAssignee,
   onNavigate
 }: ProjectsViewProps) {
-  const canEditStatus = userRole === 'Admin' || userRole === 'Team Leader';
+  const canEditStatus = hasAction(currentUser, 'projects.manage');
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
+  const [activeTaskCategory, setActiveTaskCategory] = useState<TaskCategory>('daily');
   const [commentInput, setCommentInput] = useState('');
   const [selectedImage, setSelectedImage] = useState<MediaFile | null>(null);
   const [activeVideo, setActiveVideo] = useState<MediaFile | null>(null);
@@ -103,7 +108,7 @@ export default function ProjectsView({
             const projTasks = tasks.filter((t) => t.projectId === proj.id);
             const doneTasks = projTasks.filter((t) => t.status === 'Completed').length;
             const assigneeOptions = users.filter(
-              (u) => u.departmentId === proj.departmentId && (u.role === 'Team Leader' || u.role === 'Team Member')
+              (u) => u.departmentId === proj.departmentId && (u.baseLevel === 'team_leader' || u.baseLevel === 'team_member')
             );
 
             return (
@@ -161,7 +166,7 @@ export default function ProjectsView({
                     >
                       <option value="">Unassigned</option>
                       {assigneeOptions.map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                        <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                       ))}
                     </select>
                   </div>
@@ -216,7 +221,7 @@ export default function ProjectsView({
   const leadUser = users.find((u) => u.id === currentProject.leaderId);
   const teamUsers = users.filter((u) => currentProject.members.includes(u.id));
   const detailAssigneeOptions = users.filter(
-    (u) => u.departmentId === currentProject.departmentId && (u.role === 'Team Leader' || u.role === 'Team Member')
+    (u) => u.departmentId === currentProject.departmentId && (u.baseLevel === 'team_leader' || u.baseLevel === 'team_member')
   );
   const projectTasks = tasks.filter((t) => t.projectId === currentProject.id);
   const projectMedia = media.filter((m) => m.projectId === currentProject.id);
@@ -294,7 +299,7 @@ export default function ProjectsView({
               >
                 <option value="">Unassigned</option>
                 {detailAssigneeOptions.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                 ))}
               </select>
             </div>
@@ -442,6 +447,38 @@ export default function ProjectsView({
               Project Task Board
             </h3>
 
+            {/* Category Tabs: Daily Tasks vs. Continuous Tasks */}
+            <div className="flex border-b border-gray-100 dark:border-gray-900 mb-4">
+              <button
+                onClick={() => setActiveTaskCategory('daily')}
+                className={`px-4 py-2 border-b-2 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTaskCategory === 'daily'
+                    ? 'border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400 font-extrabold'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-250'
+                }`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Daily Tasks
+                <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 rounded-full font-mono">
+                  {projectTasks.filter(t => t.category === 'daily').length}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTaskCategory('continuous')}
+                className={`px-4 py-2 border-b-2 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTaskCategory === 'continuous'
+                    ? 'border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400 font-extrabold'
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-250'
+                }`}
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                Continuous Tasks
+                <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 rounded-full font-mono">
+                  {projectTasks.filter(t => t.category === 'continuous').length}
+                </span>
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-gray-500">
                 <thead className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-900">
@@ -455,14 +492,14 @@ export default function ProjectsView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-900">
-                  {projectTasks.length === 0 ? (
+                  {projectTasks.filter(t => t.category === activeTaskCategory).length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-xs text-gray-450">
                         No tasks established for this project.
                       </td>
                     </tr>
                   ) : (
-                    projectTasks.map((t) => {
+                    projectTasks.filter(t => t.category === activeTaskCategory).map((t) => {
                       const assignee = users.find((u) => u.id === t.assignedTo);
                       return (
                         <tr key={t.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/10 transition-colors">

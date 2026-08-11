@@ -1,4 +1,37 @@
-export type UserRole = 'Admin' | 'Team Leader' | 'Team Member';
+// The 3 levels every role still maps to under the hood, regardless of its
+// display name — drives dashboard variant, dept-scoping, and other identity
+// behavior that a custom role's name/permissions don't otherwise determine.
+export type RoleBaseLevel = 'admin' | 'team_leader' | 'team_member';
+
+// Sidebar pages a role can see, and the key actions it can perform. Both are
+// plain string keys (PAGE_KEYS/ACTION_KEYS below are the single source of
+// truth for what's valid) so admin-created custom roles aren't limited to a
+// fixed enum.
+export interface RolePermissions {
+  pages: string[];
+  actions: string[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  baseLevel: RoleBaseLevel;
+  isSystem: boolean;
+  permissions: RolePermissions;
+}
+
+export const PAGE_KEYS = ['Departments', 'Tasks', 'Calendar', 'Attendance', 'Users', 'Reports', 'Settings'] as const;
+
+export const ACTION_KEYS = [
+  'users.add',
+  'users.edit',
+  'users.delete',
+  'users.manage_login',
+  'departments.manage',
+  'projects.manage',
+  'tasks.edit_progress',
+  'attendance.manage'
+] as const;
 
 // A signup that hasn't been categorized (role assigned) by an admin yet.
 export interface PendingUser {
@@ -14,7 +47,10 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  roleId: string;
+  roleName: string;
+  baseLevel: RoleBaseLevel;
+  permissions: RolePermissions;
   departmentId: string;
   status: 'Active' | 'Inactive';
   avatar: string;
@@ -22,6 +58,7 @@ export interface User {
   performanceScore: number; // 0 to 100
   phone?: string;
   teamLeaderId?: string; // for Team Members: the Team Leader supervising them
+  employeeCode?: string; // department-letter + sequence, e.g. "H001" — assigned once, never changes
 }
 
 export interface Department {
@@ -155,7 +192,7 @@ export interface Notification {
   userId: string; // 'all' or specific ID
   title: string;
   message: string;
-  type: 'task_assigned' | 'task_completed' | 'task_approved' | 'task_rejected' | 'new_project' | 'attendance' | 'deadline';
+  type: 'task_assigned' | 'task_updated' | 'task_completed' | 'task_approved' | 'task_rejected' | 'new_project' | 'attendance' | 'deadline' | 'password_reset_request';
   time: string;
   read: boolean;
 }

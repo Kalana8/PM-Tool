@@ -8,14 +8,14 @@ import {
   X,
   Plus
 } from 'lucide-react';
-import { Task, User, Project, TaskCategory, TaskPriority } from '../lib/types';
+import { Task, User, Project, TaskCategory, TaskPriority, RoleBaseLevel } from '../lib/types';
 import TimeRangeGrid from './calendar/TimeRangeGrid';
 
 interface CalendarViewProps {
   tasks: Task[];
   users: User[];
   projects: Project[];
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  userRole: RoleBaseLevel;
   currentUserId?: string;
   onAddTask: (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => void;
 }
@@ -86,7 +86,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
     setQuickProjectId('');
     setQuickCategory('daily');
     setQuickPriority('Medium');
-    setQuickAssignedTo(userRole === 'Team Member' && currentUserId ? currentUserId : '');
+    setQuickAssignedTo(userRole === 'team_member' && currentUserId ? currentUserId : '');
     setQuickStartDate(dateStr);
     setQuickStartTime('09:00');
     setQuickDueDate(dateStr);
@@ -215,7 +215,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            SBU Sprint Calendar
+            Department Sprint Calendar
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Monitor direct project checkpoints, task deadlines, and team daily work.
@@ -669,8 +669,8 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">Select Staff</option>
-                      {users.filter((u) => u.role === 'Team Member' || u.role === 'Team Leader').map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                      {users.filter((u) => u.baseLevel === 'team_member' || u.baseLevel === 'team_leader').map((u) => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                       ))}
                     </select>
                   </div>

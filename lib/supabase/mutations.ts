@@ -18,7 +18,8 @@ import type {
   Attendance,
   MediaFile,
   Notification,
-  DailyWorkLog
+  DailyWorkLog,
+  Role
 } from '../types';
 
 const check = (error: { message: string } | null) => {
@@ -66,7 +67,7 @@ export async function dbInsertUser(user: User, businessId: string) {
     business_id: businessId,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role_id: user.roleId,
     department_id: user.departmentId,
     status: user.status,
     avatar: user.avatar,
@@ -80,7 +81,7 @@ export async function dbInsertUser(user: User, businessId: string) {
 
 export async function dbUpdateUser(id: string, updates: Partial<User>) {
   const row: Record<string, unknown> = {};
-  if (updates.role !== undefined) row.role = updates.role;
+  if (updates.roleId !== undefined) row.role_id = updates.roleId;
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.name !== undefined) row.name = updates.name;
   if (updates.title !== undefined) row.title = updates.title;
@@ -101,6 +102,59 @@ export async function dbDeclineUser(id: string) {
 // app/api/admin/delete-user disposition in the port plan).
 export async function dbDeleteUser(id: string) {
   const { error } = await supabase.from('users').delete().eq('id', id);
+  check(error);
+}
+
+// Only readable by callers whose role currently has the 'users.manage_login'
+// action (see supabase/migrations/0005_pm_user_credentials.sql) — the row is
+// written server-side by app/api/admin/create-employee, not from here.
+export async function dbGetUserCredentials(userId: string): Promise<string> {
+  const { data, error } = await supabase.from('user_credentials').select('password').eq('user_id', userId).single();
+  check(error);
+  return data!.password;
+}
+
+// Self-service, called from components/ChangePasswordGate.tsx right after a
+// user sets their own password on first login.
+export async function dbClearMustChangePassword(userId: string) {
+  const { error } = await supabase.from('users').update({ must_change_password: false }).eq('id', userId);
+  check(error);
+}
+
+// Deletes the caller's own stored temp password (RLS: "self delete own
+// credentials" in 0007_pm_password_reset_flow.sql) — it's stale the moment
+// they set their own password, so it shouldn't stay visible to admins.
+export async function dbDeleteOwnCredentials(userId: string) {
+  const { error } = await supabase.from('user_credentials').delete().eq('user_id', userId);
+  check(error);
+}
+
+// ---------------------------------------------------------------------------
+// Roles
+// ---------------------------------------------------------------------------
+export async function dbInsertRole(role: Role, businessId: string) {
+  const { error } = await supabase.from('roles').insert({
+    id: role.id,
+    business_id: businessId,
+    name: role.name,
+    base_level: role.baseLevel,
+    is_system: role.isSystem,
+    permissions: role.permissions as any
+  });
+  check(error);
+}
+
+export async function dbUpdateRole(id: string, updates: Partial<Role>) {
+  const row: Record<string, unknown> = {};
+  if (updates.name !== undefined) row.name = updates.name;
+  if (updates.baseLevel !== undefined) row.base_level = updates.baseLevel;
+  if (updates.permissions !== undefined) row.permissions = updates.permissions;
+  const { error } = await supabase.from('roles').update(row as any).eq('id', id);
+  check(error);
+}
+
+export async function dbDeleteRole(id: string) {
+  const { error } = await supabase.from('roles').delete().eq('id', id);
   check(error);
 }
 
@@ -411,4 +465,41 @@ export async function dbInsertWorklog(log: DailyWorkLog, businessId: string) {
       })));
     check(attachError);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Business (public schema — name/slug live outside the pm-scoped tables above;
+// RLS "owner admin update business" requires business_members.role in
+// ('owner','admin') for the caller, independent of this tool's own pm.roles)
+// ---------------------------------------------------------------------------
+function slugify(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'business';
+}
+
+const PERMISSION_ERROR = 'You do not have permission to update this business (requires an owner/admin workspace membership).';
+
+// Regenerates the slug from the current name on every save, so the login
+// URL always tracks whatever name is set — note this means a previously
+// shared/bookmarked login link stops working once the name changes again.
+//
+// Uses .select('id') and checks for an empty result because Postgrest's
+// RLS treats an update blocked by policy as "0 rows matched", not an error
+// — without this check, an unauthorized save would silently report success.
+export async function dbUpdateBusinessName(businessId: string, name: string): Promise<string> {
+  const base = slugify(name);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
+    const { data, error } = await supabase
+      .schema('public')
+      .from('businesses')
+      .update({ name, slug: candidate })
+      .eq('id', businessId)
+      .select('id');
+    if (!error) {
+      if (!data || data.length === 0) throw new Error(PERMISSION_ERROR);
+      return candidate;
+    }
+    if (error.code !== '23505') check(error);
+  }
+  throw new Error('Could not generate a unique login slug — try a more distinct business name.');
 }

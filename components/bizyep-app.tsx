@@ -30,11 +30,16 @@ import {
   dbUpdateAttendance,
   dbInsertNotification,
   dbMarkAllNotificationsRead,
-  dbInsertWorklog
+  dbInsertWorklog,
+  dbInsertRole,
+  dbUpdateRole,
+  dbDeleteRole,
+  dbGetUserCredentials,
+  dbUpdateBusinessName
 } from '@/lib/supabase/mutations';
 import {
   User,
-  UserRole,
+  Role,
   Department,
   Project,
   Task,
@@ -58,12 +63,12 @@ import TasksView from './TasksView';
 import CalendarView from './CalendarView';
 import ReportsView from './ReportsView';
 import UsersView from './UsersView';
+import RolesView from './RolesView';
 import FilesView from './FilesView';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy, Check } from 'lucide-react';
+import { todayISODate } from '@/lib/date';
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 
 function FullScreenMessage({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
@@ -80,11 +85,25 @@ function FullScreenMessage({ icon, title }: { icon: React.ReactNode; title: stri
  * The ported BizYep app, minus everything that used to be its own
  * session/login/pending-approval machinery — the host's server component
  * (app/page.tsx) resolves the signed-in user's pm.users profile via
- * getCurrentProfile() and only mounts this once profile.role is non-null.
+ * getCurrentProfile() and only mounts this once profile.role_id is non-null.
  */
-export function BizYepApp({ initialProfile, businessId }: { initialProfile: User; businessId: string }) {
+export function BizYepApp({
+  initialProfile,
+  businessId,
+  businessSlug,
+  businessName
+}: {
+  initialProfile: User;
+  businessId: string;
+  businessSlug: string | null;
+  businessName: string | null;
+}) {
   const [currentUser] = useState<User>(initialProfile);
   const [data, setData] = useState<AppData | null>(null);
+  const [loginLinkCopied, setLoginLinkCopied] = useState(false);
+  const [isEditingBusinessName, setIsEditingBusinessName] = useState(false);
+  const [businessNameDraft, setBusinessNameDraft] = useState('');
+  const [savingBusinessName, setSavingBusinessName] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Layout states
@@ -154,11 +173,11 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     );
   }
 
-  const userRole = currentUser.role;
+  const userRole = currentUser.baseLevel;
 
   // Actions
   const handleCheckIn = async () => {
-    const today = todayStr();
+    const today = todayISODate();
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
@@ -202,7 +221,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
   };
 
   const handleCheckOut = async () => {
-    const today = todayStr();
+    const today = todayISODate();
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
 
@@ -249,7 +268,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
       id: `log-new-${Date.now()}`,
       userId: currentUser.id,
       userName: currentUser.name,
-      date: todayStr()
+      date: todayISODate()
     };
 
     try {
@@ -435,6 +454,29 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     });
   };
 
+  // Builds and inserts an in-app notification for a task/subtask change,
+  // skipping unassigned placeholders and self-notifications (no point
+  // telling someone about a change they made themselves).
+  const notifyAssignee = async (
+    recipientId: string | undefined | null,
+    type: 'task_assigned' | 'task_updated',
+    title: string,
+    message: string
+  ): Promise<Notification | null> => {
+    if (!recipientId || recipientId === 'unassigned' || recipientId === currentUser.id) return null;
+    const notif: Notification = {
+      id: `notif-new-${Date.now()}`,
+      userId: recipientId,
+      title,
+      message,
+      type,
+      time: 'Just now',
+      read: false
+    };
+    await dbInsertNotification(notif, businessId);
+    return notif;
+  };
+
   const handleAddTask = async (task: Omit<Task, 'id' | 'comments' | 'submissions'>) => {
     const newTask: Task = {
       ...task,
@@ -469,8 +511,30 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
   };
 
   const handleUpdateTask = async (taskId: string, updates: Partial<Omit<Task, 'id' | 'comments' | 'submissions'>>) => {
+    const prevTask = data.tasks.find((t) => t.id === taskId);
+    const reassigned = updates.assignedTo !== undefined && updates.assignedTo !== prevTask?.assignedTo;
+    const otherFieldsChanged = Object.entries(updates).some(
+      ([key, value]) => key !== 'assignedTo' && value !== (prevTask as Record<string, unknown> | undefined)?.[key]
+    );
+
+    let notif: Notification | null = null;
     try {
       await dbUpdateTask(taskId, updates);
+      if (reassigned) {
+        notif = await notifyAssignee(
+          updates.assignedTo,
+          'task_assigned',
+          'Task Reassigned to You',
+          `${currentUser.name} reassigned "${prevTask?.name ?? updates.name ?? 'a task'}" to you.`
+        );
+      } else if (otherFieldsChanged) {
+        notif = await notifyAssignee(
+          prevTask?.assignedTo,
+          'task_updated',
+          'Task Updated',
+          `${currentUser.name} updated task "${prevTask?.name ?? updates.name ?? ''}".`
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update task.');
       return;
@@ -478,7 +542,8 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
     updateData({
       ...data,
-      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t)),
+      notifications: notif ? [notif, ...data.notifications] : data.notifications
     });
   };
 
@@ -497,8 +562,18 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: TaskStatus, progress: number) => {
+    const prevTask = data.tasks.find((t) => t.id === taskId);
+    let notif: Notification | null = null;
     try {
       await dbUpdateTask(taskId, { status, progress });
+      if (prevTask && prevTask.status !== status) {
+        notif = await notifyAssignee(
+          prevTask.assignedTo,
+          'task_updated',
+          'Task Status Updated',
+          `${currentUser.name} changed "${prevTask.name}" status to ${status}.`
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update task status.');
       return;
@@ -506,13 +581,24 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
     updateData({
       ...data,
-      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, status, progress } : t))
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, status, progress } : t)),
+      notifications: notif ? [notif, ...data.notifications] : data.notifications
     });
   };
 
   const handleUpdateTaskAssignee = async (taskId: string, assignedTo: string) => {
+    const prevTask = data.tasks.find((t) => t.id === taskId);
+    let notif: Notification | null = null;
     try {
       await dbUpdateTask(taskId, { assignedTo });
+      if (prevTask && prevTask.assignedTo !== assignedTo) {
+        notif = await notifyAssignee(
+          assignedTo,
+          'task_assigned',
+          'Task Reassigned to You',
+          `${currentUser.name} reassigned "${prevTask.name}" to you.`
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to reassign task.');
       return;
@@ -520,7 +606,8 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
     updateData({
       ...data,
-      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, assignedTo } : t))
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, assignedTo } : t)),
+      notifications: notif ? [notif, ...data.notifications] : data.notifications
     });
   };
 
@@ -528,8 +615,15 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     const task = data.tasks.find((t) => t.id === taskId);
     const newSubtask: Subtask = { id: `subtask-${Date.now()}`, status: 'Todo', progress: 0, ...subtask };
 
+    let notif: Notification | null = null;
     try {
       await dbInsertSubtask(taskId, newSubtask, task?.subtasks?.length ?? 0, businessId);
+      notif = await notifyAssignee(
+        newSubtask.assignedTo,
+        'task_assigned',
+        'New Subtask Assigned',
+        `${currentUser.name} assigned you a subtask: "${newSubtask.name}" (under "${task?.name ?? 'a task'}").`
+      );
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to add subtask.');
       return;
@@ -537,13 +631,37 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
     updateData({
       ...data,
-      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] } : t))
+      tasks: data.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] } : t)),
+      notifications: notif ? [notif, ...data.notifications] : data.notifications
     });
   };
 
   const handleUpdateSubtask = async (taskId: string, subtaskId: string, updates: Partial<Omit<Subtask, 'id'>>) => {
+    const parentTask = data.tasks.find((t) => t.id === taskId);
+    const prevSubtask = parentTask?.subtasks?.find((s) => s.id === subtaskId);
+    const reassigned = updates.assignedTo !== undefined && updates.assignedTo !== prevSubtask?.assignedTo;
+    const otherFieldsChanged = Object.entries(updates).some(
+      ([key, value]) => key !== 'assignedTo' && value !== (prevSubtask as Record<string, unknown> | undefined)?.[key]
+    );
+
+    let notif: Notification | null = null;
     try {
       await dbUpdateSubtask(subtaskId, updates);
+      if (reassigned) {
+        notif = await notifyAssignee(
+          updates.assignedTo,
+          'task_assigned',
+          'Subtask Reassigned to You',
+          `${currentUser.name} reassigned subtask "${prevSubtask?.name ?? updates.name ?? 'a subtask'}" to you (under "${parentTask?.name ?? 'a task'}").`
+        );
+      } else if (otherFieldsChanged) {
+        notif = await notifyAssignee(
+          prevSubtask?.assignedTo,
+          'task_updated',
+          'Subtask Updated',
+          `${currentUser.name} updated subtask "${prevSubtask?.name ?? updates.name ?? ''}" (under "${parentTask?.name ?? 'a task'}").`
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update subtask.');
       return;
@@ -555,7 +673,8 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
         t.id === taskId
           ? { ...t, subtasks: (t.subtasks || []).map((s) => (s.id === subtaskId ? { ...s, ...updates } : s)) }
           : t
-      )
+      ),
+      notifications: notif ? [notif, ...data.notifications] : data.notifications
     });
   };
 
@@ -617,11 +736,15 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     });
   };
 
-  const handleAddUser = async (user: Omit<User, 'id' | 'performanceScore'>) => {
+  const handleAddUser = async (user: Omit<User, 'id' | 'performanceScore' | 'roleName' | 'baseLevel' | 'permissions'>) => {
+    const role = data.roles.find((r) => r.id === user.roleId);
     const newUser: User = {
       ...user,
       id: `user-new-${Date.now()}`,
-      performanceScore: 85
+      performanceScore: 85,
+      roleName: role?.name ?? '',
+      baseLevel: role?.baseLevel ?? 'team_member',
+      permissions: role?.permissions ?? { pages: [], actions: [] }
     };
 
     try {
@@ -637,13 +760,130 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     });
   };
 
-  // Admin-created employees only ever get a pm.users profile row here — the
-  // actual login/business membership comes from the lead's portal invite and
-  // gets linked automatically on first sign-in (see lib/get-current-profile.ts).
-  // The password argument from the old "add employee with password" flow is
-  // intentionally unused: this tool no longer creates auth.users logins.
-  const handleAddUserWithPassword = async (user: Omit<User, 'id' | 'performanceScore'>, _password: string) => {
-    await handleAddUser(user);
+  // Creates a real Supabase Auth login (server-side, via the service-role
+  // key) plus the business_members/pm.users/pm.user_credentials rows that
+  // link it into this business — see app/api/admin/create-employee/route.ts.
+  const handleAddUserWithPassword = async (
+    user: Omit<User, 'id' | 'performanceScore' | 'roleName' | 'baseLevel' | 'permissions'>,
+    password: string
+  ) => {
+    let created: { id: string; authId: string };
+    try {
+      const res = await fetch('/api/admin/create-employee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: user.name,
+          email: user.email,
+          password,
+          departmentId: user.departmentId,
+          title: user.title,
+          phone: user.phone,
+          roleId: user.roleId,
+          teamLeaderId: user.teamLeaderId
+        })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to create employee login.');
+      created = body;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create employee login.');
+      return;
+    }
+
+    const role = data.roles.find((r) => r.id === user.roleId);
+    const newUser: User = {
+      ...user,
+      id: created.id,
+      performanceScore: 85,
+      roleName: role?.name ?? '',
+      baseLevel: role?.baseLevel ?? 'team_member',
+      permissions: role?.permissions ?? { pages: [], actions: [] }
+    };
+
+    updateData({
+      ...data,
+      users: [...data.users, newUser],
+      credentialUserIds: [...data.credentialUserIds, created.id]
+    });
+  };
+
+  const handleViewCredentials = async (userId: string): Promise<{ email: string; password: string } | null> => {
+    const target = data.users.find((u) => u.id === userId);
+    if (!target) return null;
+    try {
+      const password = await dbGetUserCredentials(userId);
+      return { email: target.email, password };
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to load credentials.');
+      return null;
+    }
+  };
+
+  // Sets a new temp password for an existing employee via
+  // app/api/admin/reset-employee-password — marks their account as needing
+  // a forced password change on next login (see ChangePasswordGate) and
+  // adds them back to credentialUserIds so the key icon reappears.
+  const handleResetPassword = async (userId: string, newPassword: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/admin/reset-employee-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, newPassword })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to reset password.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reset password.');
+      return false;
+    }
+
+    updateData({
+      ...data,
+      credentialUserIds: data.credentialUserIds.includes(userId)
+        ? data.credentialUserIds
+        : [...data.credentialUserIds, userId]
+    });
+    alert('Password reset. The employee must set a new password on their next login.');
+    return true;
+  };
+
+  // Business name/slug live in public.businesses, outside pm's own tables —
+  // RLS only lets an actual business_members owner/admin write it (separate
+  // from this tool's own pm.roles), so this can fail with an authorization
+  // error even for a pm-tool Admin who isn't also a business owner/admin.
+  // The slug is regenerated from the name on every save, so the login link
+  // always matches the current name — a previously shared link stops
+  // working once the name changes again.
+  const handleSaveBusinessName = async (name: string) => {
+    try {
+      await dbUpdateBusinessName(businessId, name);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update business name.');
+      return false;
+    }
+    window.location.reload();
+    return true;
+  };
+
+  // Emails an employee every task and subtask assigned to them, regenerated
+  // server-side from fresh data (see app/api/admin/send-task-summary-email)
+  // rather than trusting whatever the client last had loaded.
+  const handleSendTaskSummaryEmail = async (userId: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/admin/send-task-summary-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to send email.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to send email.');
+      return false;
+    }
+    alert('Task summary email sent.');
+    return true;
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -680,11 +920,11 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
   const handleCategorizeUser = async (
     pendingUserId: string,
-    updates: { role: UserRole; departmentId: string; title: string; teamLeaderId?: string }
+    updates: { roleId: string; departmentId: string; title: string; teamLeaderId?: string }
   ) => {
     try {
       await dbUpdateUser(pendingUserId, {
-        role: updates.role,
+        roleId: updates.roleId,
         departmentId: updates.departmentId,
         title: updates.title,
         teamLeaderId: updates.teamLeaderId,
@@ -697,12 +937,16 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
     const pending = data.pendingUsers.find((p) => p.id === pendingUserId);
     if (!pending) return;
+    const role = data.roles.find((r) => r.id === updates.roleId);
 
     const newUser: User = {
       id: pending.id,
       name: pending.name,
       email: pending.email,
-      role: updates.role,
+      roleId: updates.roleId,
+      roleName: role?.name ?? '',
+      baseLevel: role?.baseLevel ?? 'team_member',
+      permissions: role?.permissions ?? { pages: [], actions: [] },
       departmentId: updates.departmentId,
       status: 'Active',
       avatar: pending.avatar,
@@ -734,15 +978,16 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
   const handleEditUser = async (
     userId: string,
-    updates: { name: string; title: string; role: UserRole; departmentId: string; teamLeaderId?: string }
+    updates: { name: string; title: string; roleId: string; departmentId: string; teamLeaderId?: string }
   ) => {
+    const role = data.roles.find((r) => r.id === updates.roleId);
     try {
       await dbUpdateUser(userId, {
         name: updates.name,
         title: updates.title,
-        role: updates.role,
+        roleId: updates.roleId,
         departmentId: updates.departmentId,
-        teamLeaderId: updates.role === 'Team Member' ? updates.teamLeaderId : ''
+        teamLeaderId: role?.baseLevel === 'team_member' ? updates.teamLeaderId : ''
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update this account.');
@@ -757,9 +1002,12 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               ...u,
               name: updates.name,
               title: updates.title,
-              role: updates.role,
+              roleId: updates.roleId,
+              roleName: role?.name ?? u.roleName,
+              baseLevel: role?.baseLevel ?? u.baseLevel,
+              permissions: role?.permissions ?? u.permissions,
               departmentId: updates.departmentId,
-              teamLeaderId: updates.role === 'Team Member' ? updates.teamLeaderId : undefined
+              teamLeaderId: role?.baseLevel === 'team_member' ? updates.teamLeaderId : undefined
             }
           : u
       )
@@ -782,6 +1030,54 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
       return;
     }
     alert(`Password reset email sent to: ${email}`);
+  };
+
+  // Role management is Admin-only (base_level, not a delegable permission —
+  // see supabase/migrations/0004_pm_roles_and_permissions.sql), enforced by
+  // both these handlers only being reachable from the Roles page (which
+  // Sidebar/render-guard hide from non-admins) and by RLS server-side.
+  const handleAddRole = async (role: Omit<Role, 'id' | 'isSystem'>) => {
+    const newRole: Role = { ...role, id: `role-${Date.now()}`, isSystem: false };
+
+    try {
+      await dbInsertRole(newRole, businessId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to add role.');
+      return;
+    }
+
+    updateData({ ...data, roles: [...data.roles, newRole] });
+  };
+
+  const handleUpdateRole = async (roleId: string, updates: { name: string; permissions: Role['permissions'] }) => {
+    try {
+      await dbUpdateRole(roleId, updates);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update role.');
+      return;
+    }
+
+    updateData({
+      ...data,
+      roles: data.roles.map((r) => (r.id === roleId ? { ...r, ...updates } : r)),
+      users: data.users.map((u) => (u.roleId === roleId ? { ...u, roleName: updates.name, permissions: updates.permissions } : u))
+    });
+  };
+
+  const handleDeleteRole = async (roleId: string) => {
+    if (data.users.some((u) => u.roleId === roleId)) {
+      alert('Cannot delete a role that is still assigned to one or more users.');
+      return;
+    }
+
+    try {
+      await dbDeleteRole(roleId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete role.');
+      return;
+    }
+
+    updateData({ ...data, roles: data.roles.filter((r) => r.id !== roleId) });
   };
 
   const handleAddDepartment = async (dept: Omit<Department, 'id'>) => {
@@ -912,7 +1208,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     const newFile: MediaFile = {
       ...file,
       id: `media-new-${Date.now()}`,
-      dateAdded: todayStr()
+      dateAdded: todayISODate()
     };
 
     try {
@@ -964,9 +1260,9 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
   };
 
   // Isolate datasets for "Team Member" role to enforce "display only his/her details only"
-  const isTeamMember = userRole === 'Team Member';
+  const isTeamMember = userRole === 'team_member';
   // Isolate datasets for "Team Leader" role: only their own department & their own team members
-  const isTeamLeader = userRole === 'Team Leader';
+  const isTeamLeader = userRole === 'team_leader';
   const isDeptScoped = isTeamMember || isTeamLeader;
 
   // IDs of the Team Members directly supervised by this Team Leader
@@ -974,7 +1270,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
     ? data.users.filter((u) => u.teamLeaderId === currentUser.id).map((u) => u.id)
     : [];
 
-  // Filter departments: Team Members and Team Leaders only see their own SBU
+  // Filter departments: Team Members and Team Leaders only see their own department
   const visibleDepartments = isDeptScoped
     ? data.departments.filter((d) => d.id === currentUser.departmentId)
     : data.departments;
@@ -986,7 +1282,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
 
   // Filter tasks: a Team Member sees only their own tasks; a Team Leader sees every
   // task in their own department (their team's tasks, plus any others logged against
-  // that SBU) in addition to anything assigned to themselves
+  // that department) in addition to anything assigned to themselves
   const visibleTasks = isTeamMember
     ? data.tasks.filter((t) => t.assignedTo === currentUser.id)
     : isTeamLeader
@@ -1036,7 +1332,8 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
         departments={visibleDepartments}
         selectedDeptId={selectedDeptId}
         onDeptSelect={setSelectedDeptId}
-        userRole={userRole}
+        userRole={currentUser.roleName}
+        currentUser={currentUser}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={() => setSidebarCollapsed((prev) => !prev)}
       />
@@ -1048,7 +1345,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
           currentView={currentView}
           selectedProjectName={visibleProjects.find((p) => p.id === selectedProjectId)?.name}
           onSearchClick={() => setIsCommandPaletteOpen(true)}
-          userRole={userRole}
+          userRole={currentUser.roleName}
           currentUser={currentUser}
           notifications={data.notifications.filter((n) => n.userId === 'all' || n.userId === currentUser.id)}
           onMarkNotificationsRead={handleMarkNotificationsRead}
@@ -1062,7 +1359,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
         <main className="flex-1 p-8 overflow-y-auto max-w-7xl w-full mx-auto pb-16">
           {currentView === 'Dashboard' && (
             <>
-              {userRole === 'Admin' && (
+              {userRole === 'admin' && (
                 <AdminDashboard
                   users={visibleUsers}
                   projects={visibleProjects}
@@ -1073,7 +1370,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
                   onNavigate={handleSearchNavigate}
                 />
               )}
-              {userRole === 'Team Leader' && (
+              {userRole === 'team_leader' && (
                 <TeamLeaderDashboard
                   currentUser={currentUser}
                   users={visibleUsers}
@@ -1087,9 +1384,10 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
                   onNavigate={handleSearchNavigate}
                 />
               )}
-              {userRole === 'Team Member' && (
+              {userRole === 'team_member' && (
                 <TeamMemberDashboard
                   currentUser={currentUser}
+                  departments={visibleDepartments}
                   projects={visibleProjects}
                   tasks={visibleTasks}
                   attendance={visibleAttendance}
@@ -1107,7 +1405,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
             <DepartmentsView
               departments={visibleDepartments}
               users={visibleUsers}
-              admins={data.users.filter((u) => u.role === 'Admin')}
+              admins={data.users.filter((u) => u.baseLevel === 'admin')}
               projects={visibleProjects}
               media={visibleMedia}
               tasks={visibleTasks}
@@ -1115,6 +1413,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               onDeptSelect={setSelectedDeptId}
               onNavigate={handleSearchNavigate}
               userRole={userRole}
+              currentUser={currentUser}
               onAddDepartment={handleAddDepartment}
               onUpdateDepartment={handleUpdateDepartment}
               onUpdateDepartmentStatus={handleUpdateDepartmentStatus}
@@ -1134,6 +1433,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               onReorderTasks={handleReorderTasks}
               onReorderSubtasks={handleReorderSubtasks}
               onAddComment={handleAddComment}
+              onSendTaskSummaryEmail={handleSendTaskSummaryEmail}
             />
           )}
 
@@ -1145,6 +1445,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               media={visibleMedia}
               selectedProjectId={selectedProjectId}
               userRole={userRole}
+              currentUser={currentUser}
               onProjectSelect={setSelectedProjectId}
               onAddComment={handleAddComment}
               onUpdateProjectStatus={handleUpdateProjectStatus}
@@ -1157,9 +1458,10 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
             <TasksView
               tasks={visibleTasks}
               users={visibleUsers}
-              admins={data.users.filter((u) => u.role === 'Admin')}
+              admins={data.users.filter((u) => u.baseLevel === 'admin')}
               projects={visibleProjects}
               userRole={userRole}
+              currentUser={currentUser}
               currentUserId={currentUser.id}
               onAddTask={handleAddTask}
               onUpdateTask={handleUpdateTask}
@@ -1171,6 +1473,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               onDeleteSubtask={handleDeleteSubtask}
               onReorderTasks={handleReorderTasks}
               onReorderSubtasks={handleReorderSubtasks}
+              onSendTaskSummaryEmail={handleSendTaskSummaryEmail}
             />
           )}
 
@@ -1257,6 +1560,7 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               users={data.users}
               departments={data.departments}
               userRole={userRole}
+              currentUser={currentUser}
               currentUserId={currentUser.id}
               onAddUser={handleAddUser}
               onToggleUserStatus={handleToggleUserStatus}
@@ -1265,8 +1569,24 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
               onDeclineUser={handleDeclineUser}
               onEditUser={handleEditUser}
               onSendPasswordReset={handleSendPasswordReset}
+              onResetPassword={handleResetPassword}
               onAddUserWithPassword={handleAddUserWithPassword}
               onDeleteUser={handleDeleteUser}
+              roles={data.roles}
+              credentialUserIds={data.credentialUserIds}
+              onViewCredentials={handleViewCredentials}
+              businessSlug={businessSlug}
+              onSendTaskSummaryEmail={handleSendTaskSummaryEmail}
+            />
+          )}
+
+          {currentView === 'Roles' && userRole === 'admin' && (
+            <RolesView
+              roles={data.roles}
+              users={data.users}
+              onAddRole={handleAddRole}
+              onUpdateRole={handleUpdateRole}
+              onDeleteRole={handleDeleteRole}
             />
           )}
 
@@ -1282,8 +1602,98 @@ export function BizYepApp({ initialProfile, businessId }: { initialProfile: User
                   <img src={currentUser.avatar} alt={currentUser.name} className="h-12 w-12 rounded-full object-cover" />
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">{currentUser.name}</h3>
-                    <p className="text-xs text-blue-600 font-semibold">{currentUser.role} Profile Active</p>
+                    <p className="text-xs text-blue-600 font-semibold">{currentUser.roleName} Profile Active</p>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Business Name</label>
+                  {isEditingBusinessName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="business-name-input"
+                        type="text"
+                        value={businessNameDraft}
+                        onChange={(e) => setBusinessNameDraft(e.target.value)}
+                        autoFocus
+                        className="flex-1 rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        id="save-business-name-btn"
+                        disabled={savingBusinessName || !businessNameDraft.trim()}
+                        onClick={async () => {
+                          setSavingBusinessName(true);
+                          const ok = await handleSaveBusinessName(businessNameDraft.trim());
+                          setSavingBusinessName(false);
+                          if (ok) setIsEditingBusinessName(false);
+                        }}
+                        className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-xs font-bold disabled:opacity-60"
+                      >
+                        {savingBusinessName ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        id="cancel-business-name-btn"
+                        onClick={() => setIsEditingBusinessName(false)}
+                        className="rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 text-gray-600 dark:text-gray-300 px-3 py-2 text-xs font-semibold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                      <span className="flex-1 text-xs text-gray-900 dark:text-gray-100">{businessName || 'Unnamed business'}</span>
+                      {userRole === 'admin' && (
+                        <button
+                          id="edit-business-name-btn"
+                          onClick={() => {
+                            setBusinessNameDraft(businessName || '');
+                            setIsEditingBusinessName(true);
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    {businessSlug
+                      ? "Saving a new name here also updates the login link below to match — any previously shared link stops working."
+                      : "Saving a name here also creates this business's login link below, since none exists yet."}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                    Login Link{businessName ? ` for ${businessName}` : ''}
+                  </label>
+                  {SITE_URL && businessSlug ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                      <a
+                        href={`${SITE_URL}/${businessSlug}/user-login`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-xs text-blue-600 hover:underline truncate"
+                      >
+                        {`${SITE_URL}/${businessSlug}/user-login`}
+                      </a>
+                      <button
+                        id="copy-settings-login-link-btn"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${SITE_URL}/${businessSlug}/user-login`);
+                          setLoginLinkCopied(true);
+                          setTimeout(() => setLoginLinkCopied(false), 1500);
+                        }}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Copy login link"
+                      >
+                        {loginLinkCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-gray-400 italic">Not available yet (this business has no login slug configured).</p>
+                  )}
+                  <p className="text-[9px] text-gray-400 mt-1">Bookmark this link — it&apos;s where you (and every employee at {businessName || 'your company'}) sign in.</p>
                 </div>
               </div>
             </div>

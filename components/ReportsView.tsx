@@ -44,10 +44,10 @@ export default function ReportsView({
   };
 
   const performanceReports = [
-    { name: 'Web Development SBU', code: 'WEBDEV', score: getAvgScore(webMembers), target: 90, color: 'bg-indigo-500' },
-    { name: 'UI/UX Design SBU', code: 'UIUX', score: getAvgScore(designMembers), target: 95, color: 'bg-amber-500' },
-    { name: 'QA Testing SBU', code: 'QA', score: getAvgScore(qaMembers), target: 88, color: 'bg-rose-500' },
-    { name: 'Digital Marketing SBU', code: 'MKT', score: getAvgScore(marketingMembers), target: 85, color: 'bg-emerald-500' }
+    { name: 'Web Development', code: 'WEBDEV', score: getAvgScore(webMembers), target: 90, color: 'bg-indigo-500' },
+    { name: 'UI/UX Design', code: 'UIUX', score: getAvgScore(designMembers), target: 95, color: 'bg-amber-500' },
+    { name: 'QA Testing', code: 'QA', score: getAvgScore(qaMembers), target: 88, color: 'bg-rose-500' },
+    { name: 'Digital Marketing', code: 'MKT', score: getAvgScore(marketingMembers), target: 85, color: 'bg-emerald-500' }
   ];
 
   // Render SVG Performance comparisons
@@ -72,7 +72,7 @@ export default function ReportsView({
 
           return (
             <g key={idx} className="group/bar">
-              {/* SBU Label */}
+              {/* Department Label */}
               <text
                 x={paddingLeft - 12}
                 y={y + 14}
@@ -168,7 +168,7 @@ export default function ReportsView({
                 : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            SBU Output
+            Department Output
           </button>
           <button
             id="report-tab-attendance"
@@ -194,7 +194,7 @@ export default function ReportsView({
             </h3>
             <p className="text-[10px] text-gray-400">
               {activeTab === 'performance'
-                ? 'Calculated average score of SBU direct deliverables.'
+                ? 'Calculated average score of department direct deliverables.'
                 : 'Weekly presence and on-time performance charts.'}
             </p>
           </div>
@@ -247,7 +247,7 @@ export default function ReportsView({
           </div>
 
           <div className="space-y-4 flex-1">
-            {users.filter(u => u.role === 'Team Member').slice(0, 3).map((user, idx) => (
+            {users.filter(u => u.baseLevel === 'team_member').slice(0, 3).map((user, idx) => (
               <div key={user.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="h-6 w-6 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">
@@ -273,7 +273,7 @@ export default function ReportsView({
         </div>
       </div>
 
-      {/* Row 2: Comprehensive SBU Table */}
+      {/* Row 2: Comprehensive Department Table */}
       <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
         <div className="border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Department Performance Grid</h3>
@@ -284,7 +284,7 @@ export default function ReportsView({
           <table className="w-full text-left text-xs text-gray-500">
             <thead className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-900">
               <tr>
-                <th className="py-2.5">Department SBU</th>
+                <th className="py-2.5">Department</th>
                 <th className="py-2.5">Code</th>
                 <th className="py-2.5 text-center">Headcount</th>
                 <th className="py-2.5 text-center">Active Initiatives</th>

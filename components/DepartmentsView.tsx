@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Briefcase,
+  Calendar,
   Users,
-  MessageSquare,
   BarChart3,
   CheckSquare,
   Search,
@@ -22,9 +22,10 @@ import {
   Trash2,
   Edit2,
   Eye,
-  Save
+  Mail
 } from 'lucide-react';
-import { Department, User, Project, MediaFile, Task, TaskComment, TaskStatus, TaskPriority, Subtask } from '../lib/types';
+import { Department, User, Project, MediaFile, Task, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
+import { hasAction } from '../lib/permissions';
 
 interface DepartmentsViewProps {
   departments: Department[];
@@ -36,7 +37,8 @@ interface DepartmentsViewProps {
   selectedDeptId: string | null;
   onDeptSelect: (id: string | null) => void;
   onNavigate: (view: string, id?: string) => void;
-  userRole: 'Admin' | 'Team Leader' | 'Team Member';
+  userRole: RoleBaseLevel;
+  currentUser: User;
   onAddDepartment: (dept: Omit<Department, 'id'>) => void;
   onUpdateDepartment: (deptId: string, updates: Omit<Department, 'id'>) => void;
   onUpdateDepartmentStatus: (deptId: string, status: 'Active' | 'Inactive') => void;
@@ -56,9 +58,8 @@ interface DepartmentsViewProps {
   onReorderTasks: (orderedTaskIds: string[]) => void;
   onReorderSubtasks: (taskId: string, orderedSubtaskIds: string[]) => void;
   onAddComment: (projectId: string, text: string) => void;
+  onSendTaskSummaryEmail?: (userId: string) => Promise<boolean>;
 }
-
-type TabType = 'Tasks' | 'Comments' | 'ChartView';
 
 const STATUS_OPTIONS: TaskStatus[] = ['Todo', 'In Progress', 'Review', 'Completed', 'Cancelled'];
 const PROJECT_STATUS_OPTIONS: Project['status'][] = ['Planning', 'In Progress', 'In Review', 'Completed'];
@@ -86,6 +87,7 @@ export default function DepartmentsView({
   onDeptSelect,
   onNavigate,
   userRole,
+  currentUser,
   onAddDepartment,
   onUpdateDepartment,
   onUpdateDepartmentStatus,
@@ -104,14 +106,18 @@ export default function DepartmentsView({
   onDeleteSubtask,
   onReorderTasks,
   onReorderSubtasks,
-  onAddComment
+  onAddComment,
+  onSendTaskSummaryEmail
 }: DepartmentsViewProps) {
   // Navigation states
   const [activeDeptDetail, setActiveDeptDetail] = useState<string | null>(selectedDeptId);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('Tasks');
-
-  const isAdmin = userRole === 'Admin';
+  const canSendTaskEmail = userRole === 'admin' || userRole === 'team_leader';
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailUserId, setEmailUserId] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<TaskCategory>('daily');
+  const isAdmin = hasAction(currentUser, 'departments.manage');
 
   // Add / Edit Department drawer state
   const [isDeptFormOpen, setIsDeptFormOpen] = useState(false);
@@ -169,7 +175,7 @@ export default function DepartmentsView({
   };
 
   // Both Admin and Team Leader can create/edit/delete projects
-  const canManageProjects = userRole === 'Admin' || userRole === 'Team Leader';
+  const canManageProjects = hasAction(currentUser, 'projects.manage');
 
   // Add / Edit Project drawer state
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
@@ -189,7 +195,7 @@ export default function DepartmentsView({
     setProjStartDate('2026-07-08');
     setProjDeadline('2026-08-08');
     setProjStatus('Planning');
-    setProjOwnerId(userRole === 'Team Leader' && currentUserId ? currentUserId : '');
+    setProjOwnerId(userRole === 'team_leader' && currentUserId ? currentUserId : '');
     setProjAssigneeId('');
     setIsProjectFormOpen(true);
   };
@@ -260,7 +266,6 @@ export default function DepartmentsView({
 
   // Task View (read-only) drawer
   const [viewingTaskId, setViewingTaskId] = useState<string | null>(null);
-  const [newCommentText, setNewCommentText] = useState('');
 
   // Synchronize local state with props during render to avoid useEffect set-state rule
   const [prevSelectedDeptId, setPrevSelectedDeptId] = useState<string | null>(selectedDeptId);
@@ -289,7 +294,7 @@ export default function DepartmentsView({
     setSelectedProjectId(null);
   };
 
-  const canEditProgress = userRole === 'Admin' || userRole === 'Team Leader';
+  const canEditProgress = hasAction(currentUser, 'tasks.edit_progress');
 
   // Change a task's status via dropdown (progress is left untouched, no auto-fill)
   const handleTaskStatusChange = (taskId: string, nextStatus: TaskStatus) => {
@@ -414,10 +419,6 @@ export default function DepartmentsView({
         dueDays: newTaskDueDays,
         assignedTo: assignedUser ? assignedUser.id : original?.assignedTo
       });
-      const notifiedUser = assignedUser || users.find((u) => u.id === original?.assignedTo);
-      if (notifiedUser) {
-        alert(`Email notification sent to ${notifiedUser.name} (${notifiedUser.email}) about task: "${newTaskName}"`);
-      }
       setEditingTaskId(null);
       setNewTaskName('');
       return;
@@ -427,7 +428,7 @@ export default function DepartmentsView({
       name: newTaskName,
       projectId: selectedProjectId,
       departmentId: activeDeptDetail,
-      category: 'daily',
+      category: activeCategory,
       description: 'Quick task registered via project console',
       priority: 'Medium',
       status: 'Todo',
@@ -439,9 +440,6 @@ export default function DepartmentsView({
       dueDays: newTaskDueDays,
       assignedTo: assignedUser ? assignedUser.id : 'unassigned'
     });
-    if (assignedUser) {
-      alert(`Email notification sent to ${assignedUser.name} (${assignedUser.email}) about task: "${newTaskName}"`);
-    }
     setNewTaskName('');
   };
 
@@ -466,21 +464,6 @@ export default function DepartmentsView({
     if (window.confirm(`Delete task "${task.name}"? This cannot be undone.`)) {
       onDeleteTask(task.id);
     }
-  };
-
-  const handleSaveTaskLocal = (task: Task) => {
-    const assignee = users.find((u) => u.id === task.assignedTo);
-    if (assignee) {
-      alert(`Email notification sent to ${assignee.name} (${assignee.email}) about task: "${task.name}"`);
-    }
-  };
-
-  // Post comment to selected project console
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCommentText.trim() || !selectedProjectId) return;
-    onAddComment(selectedProjectId, newCommentText);
-    setNewCommentText('');
   };
 
   // Filter departments based on search
@@ -512,24 +495,39 @@ export default function DepartmentsView({
     const activeProject = deptProjects.find((p) => p.id === selectedProjectId) || null;
 
     // Filter tasks for the selected project
-    const projectTasks = activeProject
+    const allProjectTasks = activeProject
       ? tasks.filter((t) => t.projectId === activeProject.id)
       : [];
+    const projectTasks = allProjectTasks.filter((t) => t.category === activeCategory);
 
-    const totalProjTasks = projectTasks.length;
-    const completedProjTasks = projectTasks.filter((t) => t.status === 'Completed').length;
+    const totalProjTasks = allProjectTasks.length;
+    const completedProjTasks = allProjectTasks.filter((t) => t.status === 'Completed').length;
     const projectProgress =
       totalProjTasks > 0 ? Math.round((completedProjTasks / totalProjTasks) * 100) : 0;
 
-    // Aggregate all comments across project's tasks to show in Comments tab
-    const allProjectComments = projectTasks.reduce<TaskComment[]>((acc, task) => {
-      if (task.comments) {
-        return [...acc, ...task.comments];
-      }
-      return acc;
-    }, []);
-
     const viewingTask = tasks.find((t) => t.id === viewingTaskId) || null;
+
+    // Preview only — the email itself is regenerated server-side from fresh
+    // data when sent, this is just to show the admin/leader what's assigned
+    // before they commit to sending it.
+    const emailPreviewTasks = tasks.filter((t) => t.assignedTo === emailUserId);
+    const emailPreviewTaskIds = new Set(emailPreviewTasks.map((t) => t.id));
+    const emailPreviewExtraSubtasks = tasks.flatMap((t) =>
+      !emailPreviewTaskIds.has(t.id)
+        ? (t.subtasks ?? []).filter((s) => s.assignedTo === emailUserId).map((s) => ({ ...s, parentTaskName: t.name }))
+        : []
+    );
+
+    const handleSendEmail = async () => {
+      if (!emailUserId) return;
+      setEmailSending(true);
+      const ok = await onSendTaskSummaryEmail?.(emailUserId);
+      setEmailSending(false);
+      if (ok) {
+        setIsEmailModalOpen(false);
+        setEmailUserId('');
+      }
+    };
 
     return (
       <div className="flex flex-col h-[calc(100vh-80px)]" id="departments-split-view">
@@ -539,7 +537,7 @@ export default function DepartmentsView({
             <button
               onClick={activeProject ? handleBackToProjectGrid : handleBackToList}
               className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors text-slate-500"
-              title={activeProject ? 'Back to Projects' : 'Back to SBU List'}
+              title={activeProject ? 'Back to Projects' : 'Back to Department List'}
             >
               <ArrowLeft className="h-4.5 w-4.5" />
             </button>
@@ -547,7 +545,7 @@ export default function DepartmentsView({
               className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer transition-colors"
               onClick={handleBackToList}
             >
-              Strategic Business Units
+              Departments
             </span>
             <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-700" />
             {activeProject ? (
@@ -568,7 +566,7 @@ export default function DepartmentsView({
             )}
           </div>
           <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded">
-            SBU Code: {currentDept.code}
+            Department Code: {currentDept.code}
           </span>
         </div>
 
@@ -611,7 +609,7 @@ export default function DepartmentsView({
                       {deptProjects.map((p) => {
                         const owner = users.find((u) => u.id === p.leaderId) || admins.find((u) => u.id === p.leaderId);
                         const deptAssigneeOptions = users.filter(
-                          (u) => u.departmentId === p.departmentId && (u.role === 'Team Leader' || u.role === 'Team Member')
+                          (u) => u.departmentId === p.departmentId && (u.baseLevel === 'team_leader' || u.baseLevel === 'team_member')
                         );
                         return (
                           <tr
@@ -650,7 +648,7 @@ export default function DepartmentsView({
                               >
                                 <option value="">Unassigned</option>
                                 {deptAssigneeOptions.map((u) => (
-                                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                                  <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                                 ))}
                               </select>
                             </td>
@@ -714,7 +712,7 @@ export default function DepartmentsView({
                       {deptProjects.length === 0 && (
                         <tr>
                           <td colSpan={6} className="py-16 text-center text-slate-400 font-sans">
-                            No active projects found for this SBU.
+                            No active projects found for this department.
                           </td>
                         </tr>
                       )}
@@ -764,27 +762,56 @@ export default function DepartmentsView({
                     </div>
                   </div>
 
-                  {/* Tabs */}
-                  <div className="flex bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg text-xs font-semibold">
-                    {(['Tasks', 'Comments', 'ChartView'] as TabType[]).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-3 py-1 rounded-md transition-all ${
-                          activeTab === tab
-                            ? 'bg-white dark:bg-slate-950 text-blue-600 dark:text-blue-400 shadow-sm font-bold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        }`}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
+                  {canSendTaskEmail && (
+                    <button
+                      id="open-dept-email-task-summary-btn"
+                      onClick={() => {
+                        setEmailUserId('');
+                        setIsEmailModalOpen(true);
+                      }}
+                      className="flex items-center gap-1 rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Email Task Summary
+                    </button>
+                  )}
                 </div>
 
-                {/* Tab Contents */}
+                {/* Category Tabs: Daily Tasks vs. Continuous Tasks */}
+                <div className="flex border-b border-slate-100 dark:border-slate-900 px-4">
+                  <button
+                    onClick={() => setActiveCategory('daily')}
+                    className={`px-4 py-2 border-b-2 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      activeCategory === 'daily'
+                        ? 'border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400 font-extrabold'
+                        : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Daily Tasks
+                    <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-full font-mono">
+                      {allProjectTasks.filter(t => t.category === 'daily').length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setActiveCategory('continuous')}
+                    className={`px-4 py-2 border-b-2 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      activeCategory === 'continuous'
+                        ? 'border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400 font-extrabold'
+                        : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    Continuous Tasks
+                    <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-full font-mono">
+                      {allProjectTasks.filter(t => t.category === 'continuous').length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Tasks */}
                 <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin">
-                  {activeTab === 'Tasks' && (
+                  {(
                     <div className="p-4 space-y-4">
                       {/* Task quick adding form */}
                       <form onSubmit={handleAddTask} className="space-y-2 bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-900">
@@ -803,10 +830,10 @@ export default function DepartmentsView({
                           >
                             <option value="Unassigned">Assignee</option>
                             {users
-                              .filter((u) => u.departmentId === activeDeptDetail && (u.role === 'Team Member' || u.role === 'Team Leader'))
+                              .filter((u) => u.departmentId === activeDeptDetail && (u.baseLevel === 'team_member' || u.baseLevel === 'team_leader'))
                               .map((u) => (
                                 <option key={u.id} value={u.id}>
-                                  {u.name} ({u.role})
+                                  {u.name} ({u.roleName})
                                 </option>
                               ))}
                           </select>
@@ -898,11 +925,11 @@ export default function DepartmentsView({
                               const completedSubCount = subtasks.filter((s) => s.status === 'Completed').length;
                               const visibleTaskIds = projectTasks.map((pt) => pt.id);
                               const taskAssigneeOptions = users.filter(
-                                (u) => u.departmentId === t.departmentId && (u.role === 'Team Member' || u.role === 'Team Leader')
+                                (u) => u.departmentId === t.departmentId && (u.baseLevel === 'team_member' || u.baseLevel === 'team_leader')
                               );
                               const subtaskOwnerOptions = Array.from(
                                 new Map(
-                                  [...admins, ...users.filter((u) => u.role === 'Team Leader' && u.departmentId === t.departmentId)]
+                                  [...admins, ...users.filter((u) => u.baseLevel === 'team_leader' && u.departmentId === t.departmentId)]
                                     .map((u) => [u.id, u])
                                 ).values()
                               );
@@ -1030,14 +1057,6 @@ export default function DepartmentsView({
                                   {/* Actions */}
                                   <td className="p-2.5" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center justify-end gap-1">
-                                      <button
-                                        id={`dept-task-save-btn-${t.id}`}
-                                        onClick={() => handleSaveTaskLocal(t)}
-                                        className="rounded-lg p-1.5 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
-                                        title="Save & notify assignee"
-                                      >
-                                        <Save className="h-3.5 w-3.5" />
-                                      </button>
                                       <button
                                         id={`dept-task-view-btn-${t.id}`}
                                         onClick={() => setViewingTaskId(t.id)}
@@ -1311,88 +1330,6 @@ export default function DepartmentsView({
                       </div>
                     </div>
                   )}
-
-                  {activeTab === 'Comments' && (
-                    <div className="p-4 space-y-4">
-                      {/* Comments feed */}
-                      <div className="space-y-3.5 max-h-80 overflow-y-auto pr-1">
-                        {allProjectComments.map((comment) => (
-                          <div key={comment.id} className="flex gap-2.5 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/35 border border-slate-100 dark:border-slate-900">
-                            <img
-                              src={comment.userAvatar}
-                              alt={comment.userName}
-                              className="h-7 w-7 rounded-full object-cover shrink-0"
-                            />
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-extrabold text-slate-950 dark:text-slate-100">
-                                  {comment.userName}
-                                </span>
-                                <span className="text-[9px] text-slate-400 font-mono">{comment.timestamp}</span>
-                              </div>
-                              <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
-                                {comment.text}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-
-                        {allProjectComments.length === 0 && (
-                          <div className="py-12 text-center text-xs text-slate-400 font-sans">
-                            No project comments posted yet. Start the conversation!
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Comment submission form */}
-                      <form onSubmit={handleAddComment} className="flex items-start gap-2.5 border-t border-slate-100 dark:border-slate-900 pt-3">
-                        <input
-                          type="text"
-                          placeholder="Type an announcement or response note..."
-                          value={newCommentText}
-                          onChange={(e) => setNewCommentText(e.target.value)}
-                          className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500 font-sans"
-                        />
-                        <button
-                          type="submit"
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5" /> Post
-                        </button>
-                      </form>
-                    </div>
-                  )}
-
-                  {activeTab === 'ChartView' && (
-                    <div className="p-6 flex flex-col items-center justify-center space-y-4">
-                      <div className="text-center">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                          Active SBU Velocity Chart
-                        </h4>
-                        <p className="text-[10px] text-slate-400">
-                          Completion status metrics grouped dynamically
-                        </p>
-                      </div>
-
-                      <div className="flex items-end gap-3 h-44 w-full max-w-sm justify-center pt-4 border-b border-slate-100 dark:border-slate-900">
-                        {projectTasks.map((t, idx) => (
-                          <div key={t.id || idx} className="flex-1 flex flex-col items-center">
-                            <div
-                              className={`w-4.5 rounded-t-md transition-all duration-500 ${
-                                t.status === 'Completed'
-                                  ? 'bg-blue-600 dark:bg-blue-500'
-                                  : 'bg-slate-200 dark:bg-slate-800'
-                              }`}
-                              style={{ height: `${t.status === 'Completed' ? '120px' : '40px'}` }}
-                            />
-                            <span className="text-[9px] font-mono text-slate-400 truncate max-w-[40px] mt-1.5">
-                              {t.id}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </>
             )}
@@ -1442,21 +1379,21 @@ export default function DepartmentsView({
                       id="project-owner-select"
                       required
                       value={projOwnerId}
-                      disabled={userRole === 'Team Leader'}
+                      disabled={userRole === 'team_leader'}
                       onChange={(e) => setProjOwnerId(e.target.value)}
                       className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <option value="">Select Owner</option>
                       {Array.from(
                         new Map(
-                          [...admins, ...users.filter((u) => u.role === 'Team Leader' && u.departmentId === activeDeptDetail)]
+                          [...admins, ...users.filter((u) => u.baseLevel === 'team_leader' && u.departmentId === activeDeptDetail)]
                             .map((u) => [u.id, u])
                         ).values()
                       ).map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                        <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                       ))}
                     </select>
-                    <p className="text-[9px] text-slate-400 mt-1">Only Admins or this SBU&apos;s Team Leader can own a project.</p>
+                    <p className="text-[9px] text-slate-400 mt-1">Only Admins or this department&apos;s Team Leader can own a project.</p>
                   </div>
 
                   <div>
@@ -1469,9 +1406,9 @@ export default function DepartmentsView({
                     >
                       <option value="">Unassigned</option>
                       {users
-                        .filter((u) => u.departmentId === activeDeptDetail && (u.role === 'Team Leader' || u.role === 'Team Member'))
+                        .filter((u) => u.departmentId === activeDeptDetail && (u.baseLevel === 'team_leader' || u.baseLevel === 'team_member'))
                         .map((u) => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                          <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
                         ))}
                     </select>
                     <p className="text-[9px] text-slate-400 mt-1">A Team Leader or Team Member can be assigned to drive this project.</p>
@@ -1663,6 +1600,100 @@ export default function DepartmentsView({
             </div>
           </div>
         )}
+
+        {/* Email Task Summary Modal */}
+        {isEmailModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-2xl border border-gray-100 dark:border-gray-900 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Email Task Summary</h3>
+                  <p className="text-[10px] text-gray-400">Select a person to preview and email all their tasks and subtasks.</p>
+                </div>
+                <button
+                  id="close-dept-email-summary-modal"
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="rounded-lg p-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-650"
+                >
+                  <X className="h-4.5 w-4.5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto pr-1">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Person</label>
+                  <select
+                    id="dept-email-summary-user-select"
+                    value={emailUserId}
+                    onChange={(e) => setEmailUserId(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select a person...</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.roleName})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {emailUserId && (
+                  emailPreviewTasks.length === 0 && emailPreviewExtraSubtasks.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-6">No tasks or subtasks assigned to this person.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {emailPreviewTasks.map((t) => (
+                        <div key={t.id} className="rounded-xl border border-gray-100 dark:border-gray-900 p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-gray-900 dark:text-gray-100">{t.name}</p>
+                            <span className="text-[9px] font-bold text-gray-400 uppercase">{t.status} • {t.progress}%</span>
+                          </div>
+                          {(t.subtasks ?? []).length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5 pl-3">
+                              {(t.subtasks ?? []).map((s) => (
+                                <li key={s.id} className="text-[10px] text-gray-500 dark:text-gray-400">
+                                  ↳ {s.name} <span className="text-gray-400">— {s.status}, {s.progress}%</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                      {emailPreviewExtraSubtasks.length > 0 && (
+                        <div className="rounded-xl border border-gray-100 dark:border-gray-900 p-3">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Additional Subtasks</p>
+                          <ul className="space-y-0.5">
+                            {emailPreviewExtraSubtasks.map((s) => (
+                              <li key={s.id} className="text-[10px] text-gray-500 dark:text-gray-400">
+                                {s.name} <span className="text-gray-400">(under &quot;{s.parentTaskName}&quot;) — {s.status}, {s.progress}%</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-900 pt-4 mt-4">
+                <button
+                  id="cancel-dept-email-summary-btn"
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="rounded-xl bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 text-gray-600 dark:text-gray-300 px-4 py-2 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="send-dept-email-summary-btn"
+                  onClick={handleSendEmail}
+                  disabled={!emailUserId || emailSending}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-xs font-bold shadow-md shadow-blue-500/10 disabled:opacity-60"
+                >
+                  {emailSending ? 'Sending...' : 'Send Email'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1673,7 +1704,7 @@ export default function DepartmentsView({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Strategic Business Units (SBUs)
+            Departments
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Monitor department efficiency metrics, task velocity, and project rosters.
@@ -1687,7 +1718,7 @@ export default function DepartmentsView({
             <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search SBUs..."
+              placeholder="Search Departments..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs text-slate-800 dark:text-slate-100 outline-none w-48 focus:border-blue-500"
@@ -1743,7 +1774,7 @@ export default function DepartmentsView({
                 >
                   {/* ID */}
                   <td className={`p-3 font-mono text-[11px] font-bold text-slate-400 dark:text-slate-500 ${rowAccent}`}>
-                    {dept.id.replace('dept-', 'SBU-').toUpperCase()}
+                    {dept.id.replace('dept-', 'DEPT-').toUpperCase()}
                   </td>
 
                   {/* Name */}
@@ -1843,7 +1874,7 @@ export default function DepartmentsView({
             {filteredDepartments.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-slate-400 font-sans">
-                  No Strategic Business Units matched your filters.
+                  No Departments matched your filters.
                 </td>
               </tr>
             )}
@@ -1862,7 +1893,7 @@ export default function DepartmentsView({
                     {editingDeptId ? 'Edit Department' : 'Add Department'}
                   </h3>
                   <p className="text-[10px] text-slate-400">
-                    {editingDeptId ? 'Update this Strategic Business Unit.' : 'Register a new Strategic Business Unit.'}
+                    {editingDeptId ? 'Update this Department.' : 'Register a new Department.'}
                   </p>
                 </div>
                 <button
@@ -1889,7 +1920,7 @@ export default function DepartmentsView({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">SBU Code</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department Code</label>
                   <input
                     id="dept-code-input"
                     type="text"

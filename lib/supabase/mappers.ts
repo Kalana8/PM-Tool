@@ -16,7 +16,9 @@ import type {
   MediaFile,
   Notification,
   DailyWorkLog,
-  Milestone
+  Milestone,
+  Role,
+  RolePermissions
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -45,19 +47,33 @@ function avatarOrPlaceholder(avatar: string | null | undefined, name: string): s
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+export function mapRole(row: any): Role {
+  return {
+    id: row.id,
+    name: row.name,
+    baseLevel: row.base_level,
+    isSystem: row.is_system,
+    permissions: (row.permissions as RolePermissions) ?? { pages: [], actions: [] }
+  };
+}
+
 export function mapUser(row: any): User {
   return {
     id: row.id,
     name: row.name,
     email: row.email,
-    role: row.role,
+    roleId: row.role_id,
+    roleName: row.roles?.name ?? '',
+    baseLevel: row.roles?.base_level ?? 'team_member',
+    permissions: (row.roles?.permissions as RolePermissions) ?? { pages: [], actions: [] },
     departmentId: row.department_id,
     status: row.status,
     avatar: avatarOrPlaceholder(row.avatar, row.name),
     title: row.title,
     performanceScore: row.performance_score,
     phone: row.phone ?? undefined,
-    teamLeaderId: row.team_leader_id ?? undefined
+    teamLeaderId: row.team_leader_id ?? undefined,
+    employeeCode: row.employee_code ?? undefined
   };
 }
 
@@ -217,6 +233,8 @@ export interface AppData {
   departments: Department[];
   users: User[];
   pendingUsers: PendingUser[];
+  roles: Role[];
+  credentialUserIds: string[];
   projects: Project[];
   tasks: Task[];
   attendance: Attendance[];
@@ -225,11 +243,15 @@ export interface AppData {
   worklogs: DailyWorkLog[];
 }
 
+const USER_SELECT = '*, roles(id, name, base_level, permissions)';
+
 export async function fetchAllData(): Promise<AppData> {
   const [
     departmentsRes,
     usersRes,
     pendingUsersRes,
+    rolesRes,
+    credentialsRes,
     mediaRes,
     projectsRes,
     tasksRes,
@@ -238,8 +260,10 @@ export async function fetchAllData(): Promise<AppData> {
     worklogsRes
   ] = await Promise.all([
     supabase.from('departments').select('*').order('name'),
-    supabase.from('users').select('*').not('role', 'is', null).order('name'),
-    supabase.from('users').select('id, auth_id, name, email, avatar, created_at').is('role', null).order('created_at'),
+    supabase.from('users').select(USER_SELECT).not('role_id', 'is', null).order('name'),
+    supabase.from('users').select('id, auth_id, name, email, avatar, created_at').is('role_id', null).order('created_at'),
+    supabase.from('roles').select('*').order('name'),
+    supabase.from('user_credentials').select('user_id'),
     supabase.from('media_files').select('*').order('date_added', { ascending: false }),
     supabase.from('employee_projects').select('*, project_members(user_id)').order('created_at'),
     supabase
@@ -257,6 +281,8 @@ export async function fetchAllData(): Promise<AppData> {
     departmentsRes.error ||
     usersRes.error ||
     pendingUsersRes.error ||
+    rolesRes.error ||
+    credentialsRes.error ||
     mediaRes.error ||
     projectsRes.error ||
     tasksRes.error ||
@@ -271,6 +297,8 @@ export async function fetchAllData(): Promise<AppData> {
     departments: (departmentsRes.data ?? []).map(mapDepartment),
     users: (usersRes.data ?? []).map(mapUser),
     pendingUsers: (pendingUsersRes.data ?? []).map(mapPendingUser),
+    roles: (rolesRes.data ?? []).map(mapRole),
+    credentialUserIds: (credentialsRes.data ?? []).map((row) => row.user_id),
     projects: (projectsRes.data ?? []).map((row) => mapProject(row, media)),
     tasks: (tasksRes.data ?? []).map(mapTask),
     attendance: (attendanceRes.data ?? []).map(mapAttendance),
