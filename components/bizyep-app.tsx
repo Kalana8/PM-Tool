@@ -157,7 +157,7 @@ export function BizYepApp({
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    window.location.href = '/dev-login';
+    window.location.href = 'https://www.bizyep.com.au/login';
   };
 
   if (loadError) {
