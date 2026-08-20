@@ -84,14 +84,20 @@ export default function Sidebar({
       }`}
     >
       {/* Brand Header */}
-      <div className={`flex h-16 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400 shrink-0">
-          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-          <line x1="3" x2="21" y1="9" y2="9"/>
-          <line x1="9" x2="9" y1="21" y2="9"/>
-        </svg>
-        {!collapsed && (
-          <span className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-slate-50">BizYep</span>
+      <div className={`flex h-20 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
+        {collapsed ? (
+          <div className="dark:bg-white dark:rounded-md dark:p-1 shrink-0">
+            <img src="/logo.jpeg" alt="Logo" className="h-10 w-auto max-w-full object-contain" />
+          </div>
+        ) : (
+          <div className="flex flex-col justify-center">
+            <div className="dark:bg-white dark:rounded-md dark:px-1.5 dark:py-1 w-fit">
+              <img src="/logo.jpeg" alt="Logo" className="h-12 w-auto object-contain object-left" />
+            </div>
+            <span className="text-[10px] font-semibold tracking-wide text-slate-400 dark:text-slate-500 uppercase mt-0.5">
+              Project Management
+            </span>
+          </div>
         )}
       </div>
 
