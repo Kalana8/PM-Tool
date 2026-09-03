@@ -1345,6 +1345,7 @@ export function BizYepApp({
           currentView={currentView}
           selectedProjectName={visibleProjects.find((p) => p.id === selectedProjectId)?.name}
           onSearchClick={() => setIsCommandPaletteOpen(true)}
+          businessName={businessName}
           userRole={currentUser.roleName}
           currentUser={currentUser}
           notifications={data.notifications.filter((n) => n.userId === 'all' || n.userId === currentUser.id)}
