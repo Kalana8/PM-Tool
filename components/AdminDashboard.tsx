@@ -380,48 +380,43 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Department Card */}
+        {/* Immediate Milestones & Deadlines */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Departments</h3>
-              <p className="text-[10px] text-gray-400">Department distribution stats.</p>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Critical Milestones</h3>
+              <p className="text-[10px] text-gray-400">Deadlines approaching priority bounds.</p>
             </div>
             <button
-              id="view-all-depts-btn"
-              onClick={() => onNavigate('Departments')}
-              className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+              id="view-all-tasks-btn"
+              onClick={() => onNavigate('Tasks')}
+              className="rounded-lg p-1 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-600 transition-colors"
             >
-              Browse All <ArrowUpRight className="h-3 w-3" />
+              <Calendar className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="grid gap-3">
-            {departments.map((dept) => {
-              const deptUsers = users.filter(u => u.departmentId === dept.id);
-              const deptProjects = projects.filter(p => p.departmentId === dept.id);
+          <div className="space-y-3">
+            {tasks.filter(t => t.priority === 'High' && t.status !== 'Completed').slice(0, 3).map((task) => {
+              const assignedUser = users.find(u => u.id === task.assignedTo);
               return (
-                <div
-                  key={dept.id}
-                  id={`view-dept-${dept.id}`}
-                  onClick={() => onNavigate('Departments')}
-                  className="rounded-xl border border-gray-100 dark:border-gray-900 p-3.5 flex items-center justify-between hover:border-blue-200 dark:hover:border-blue-900/50 hover:shadow-sm transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`rounded-xl p-2 shrink-0 ${
-                      dept.id === 'dept-webdev' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600' :
-                      dept.id === 'dept-uiux' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600' :
-                      dept.id === 'dept-qa' ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-600' :
-                      'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600'
-                    }`}>
-                      <FolderDot className="h-4.5 w-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{dept.name}</p>
-                      <p className="text-[10px] text-gray-400">{deptUsers.length} headcounts • {deptProjects.length} initiatives</p>
-                    </div>
+                <div key={task.id} className="group rounded-xl border border-gray-50 dark:border-gray-900 p-3 hover:border-red-100 dark:hover:border-red-950/20 bg-gray-50/20 dark:bg-gray-900/10 transition-all duration-200">
+                  <div className="flex items-start justify-between">
+                    <span className="rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[8px] font-bold text-red-600 dark:text-red-400 border border-red-100/60 dark:border-red-900/20 uppercase tracking-wider">
+                      High Alert
+                    </span>
+                    <span className="font-mono text-[9px] text-gray-400">{task.dueDate}</span>
                   </div>
-                  <ArrowUpRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                  <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 mt-1.5 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+                    {task.name}
+                  </h4>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100/60 dark:border-gray-900/40 text-[10px] text-gray-400">
+                    <div className="flex items-center gap-1.5">
+                      <img src={assignedUser?.avatar} alt={assignedUser?.name} className="h-4 w-4 rounded-full object-cover" />
+                      <span>{assignedUser?.name}</span>
+                    </div>
+                    <span>{task.status}</span>
+                  </div>
                 </div>
               );
             })}
@@ -494,43 +489,48 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Immediate Milestones & Deadlines */}
+        {/* Department Card */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Critical Milestones</h3>
-              <p className="text-[10px] text-gray-400">Deadlines approaching priority bounds.</p>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Departments</h3>
+              <p className="text-[10px] text-gray-400">Department distribution stats.</p>
             </div>
             <button
-              id="view-all-tasks-btn"
-              onClick={() => onNavigate('Tasks')}
-              className="rounded-lg p-1 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-600 transition-colors"
+              id="view-all-depts-btn"
+              onClick={() => onNavigate('Departments')}
+              className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
             >
-              <Calendar className="h-4 w-4" />
+              Browse All <ArrowUpRight className="h-3 w-3" />
             </button>
           </div>
 
-          <div className="space-y-3">
-            {tasks.filter(t => t.priority === 'High' && t.status !== 'Completed').slice(0, 3).map((task) => {
-              const assignedUser = users.find(u => u.id === task.assignedTo);
+          <div className="grid gap-3">
+            {departments.map((dept) => {
+              const deptUsers = users.filter(u => u.departmentId === dept.id);
+              const deptProjects = projects.filter(p => p.departmentId === dept.id);
               return (
-                <div key={task.id} className="group rounded-xl border border-gray-50 dark:border-gray-900 p-3 hover:border-red-100 dark:hover:border-red-950/20 bg-gray-50/20 dark:bg-gray-900/10 transition-all duration-200">
-                  <div className="flex items-start justify-between">
-                    <span className="rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[8px] font-bold text-red-600 dark:text-red-400 border border-red-100/60 dark:border-red-900/20 uppercase tracking-wider">
-                      High Alert
-                    </span>
-                    <span className="font-mono text-[9px] text-gray-400">{task.dueDate}</span>
-                  </div>
-                  <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 mt-1.5 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
-                    {task.name}
-                  </h4>
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100/60 dark:border-gray-900/40 text-[10px] text-gray-400">
-                    <div className="flex items-center gap-1.5">
-                      <img src={assignedUser?.avatar} alt={assignedUser?.name} className="h-4 w-4 rounded-full object-cover" />
-                      <span>{assignedUser?.name}</span>
+                <div
+                  key={dept.id}
+                  id={`view-dept-${dept.id}`}
+                  onClick={() => onNavigate('Departments')}
+                  className="rounded-xl border border-gray-100 dark:border-gray-900 p-3.5 flex items-center justify-between hover:border-blue-200 dark:hover:border-blue-900/50 hover:shadow-sm transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`rounded-xl p-2 shrink-0 ${
+                      dept.id === 'dept-webdev' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600' :
+                      dept.id === 'dept-uiux' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600' :
+                      dept.id === 'dept-qa' ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-600' :
+                      'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600'
+                    }`}>
+                      <FolderDot className="h-4.5 w-4.5" />
                     </div>
-                    <span>{task.status}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{dept.name}</p>
+                      <p className="text-[10px] text-gray-400">{deptUsers.length} headcounts • {deptProjects.length} initiatives</p>
+                    </div>
                   </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                 </div>
               );
             })}

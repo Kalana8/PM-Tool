@@ -170,52 +170,6 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Departments Filter Segment */}
-        {!collapsed && (
-          <div className="pt-5 border-t border-slate-100 dark:border-slate-900 mt-4">
-            <div className="flex items-center justify-between px-6 mb-1.5">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Departments
-              </span>
-            </div>
-            <div className="space-y-0.5">
-              <button
-                id="dept-filter-all"
-                onClick={() => onDeptSelect(null)}
-                className={`flex w-full items-center gap-2.5 px-6 py-2 text-left text-xs transition-colors ${
-                  selectedDeptId === null
-                    ? 'bg-slate-50 dark:bg-slate-900/40 text-slate-950 dark:text-slate-50 font-semibold'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 hover:text-slate-800'
-                }`}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                All Departments
-              </button>
-              {departments.map((dept) => {
-                const isSelected = selectedDeptId === dept.id;
-                return (
-                  <button
-                    key={dept.id}
-                    id={`dept-filter-${dept.id}`}
-                    onClick={() => onDeptSelect(dept.id)}
-                    className={`flex w-full items-center gap-2.5 px-6 py-2 text-left text-xs transition-colors ${
-                      isSelected
-                        ? 'bg-slate-50 dark:bg-slate-900/40 text-slate-950 dark:text-slate-50 font-semibold'
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 hover:text-slate-800'
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      dept.id === 'dept-webdev' ? 'bg-indigo-500' :
-                      dept.id === 'dept-uiux' ? 'bg-amber-500' :
-                      dept.id === 'dept-qa' ? 'bg-rose-500' : 'bg-emerald-500'
-                    }`}></span>
-                    <span className="truncate">{dept.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );
