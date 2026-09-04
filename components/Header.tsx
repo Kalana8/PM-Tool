@@ -72,7 +72,7 @@ export default function Header({
           className="text-xs font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors cursor-pointer"
           onClick={() => { window.location.href = 'https://www.bizyep.com.au/dashboard'; }}
         >
-          {businessName || 'Business'}
+          Project Management
         </span>
         <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-700" />
         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">
