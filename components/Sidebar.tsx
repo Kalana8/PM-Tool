@@ -84,14 +84,20 @@ export default function Sidebar({
       }`}
     >
       {/* Brand Header */}
-      <div className={`flex h-16 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400 shrink-0">
-          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-          <line x1="3" x2="21" y1="9" y2="9"/>
-          <line x1="9" x2="9" y1="21" y2="9"/>
-        </svg>
-        {!collapsed && (
-          <span className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-slate-50">BizYep</span>
+      <div className={`flex h-20 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
+        {collapsed ? (
+          <div className="dark:bg-white dark:rounded-md dark:p-1 shrink-0">
+            <img src="/logo.jpeg" alt="Logo" className="h-10 w-auto max-w-full object-contain" />
+          </div>
+        ) : (
+          <div className="flex flex-col justify-center">
+            <div className="dark:bg-white dark:rounded-md dark:px-1.5 dark:py-1 w-fit">
+              <img src="/logo.jpeg" alt="Logo" className="h-12 w-auto object-contain object-left" />
+            </div>
+            <span className="text-[10px] font-semibold tracking-wide text-slate-400 dark:text-slate-500 uppercase mt-0.5">
+              Project Management
+            </span>
+          </div>
         )}
       </div>
 
@@ -164,52 +170,6 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Departments Filter Segment */}
-        {!collapsed && (
-          <div className="pt-5 border-t border-slate-100 dark:border-slate-900 mt-4">
-            <div className="flex items-center justify-between px-6 mb-1.5">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Departments
-              </span>
-            </div>
-            <div className="space-y-0.5">
-              <button
-                id="dept-filter-all"
-                onClick={() => onDeptSelect(null)}
-                className={`flex w-full items-center gap-2.5 px-6 py-2 text-left text-xs transition-colors ${
-                  selectedDeptId === null
-                    ? 'bg-slate-50 dark:bg-slate-900/40 text-slate-950 dark:text-slate-50 font-semibold'
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 hover:text-slate-800'
-                }`}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
-                All Departments
-              </button>
-              {departments.map((dept) => {
-                const isSelected = selectedDeptId === dept.id;
-                return (
-                  <button
-                    key={dept.id}
-                    id={`dept-filter-${dept.id}`}
-                    onClick={() => onDeptSelect(dept.id)}
-                    className={`flex w-full items-center gap-2.5 px-6 py-2 text-left text-xs transition-colors ${
-                      isSelected
-                        ? 'bg-slate-50 dark:bg-slate-900/40 text-slate-950 dark:text-slate-50 font-semibold'
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 hover:text-slate-800'
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      dept.id === 'dept-webdev' ? 'bg-indigo-500' :
-                      dept.id === 'dept-uiux' ? 'bg-amber-500' :
-                      dept.id === 'dept-qa' ? 'bg-rose-500' : 'bg-emerald-500'
-                    }`}></span>
-                    <span className="truncate">{dept.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );

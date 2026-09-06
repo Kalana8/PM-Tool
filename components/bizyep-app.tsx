@@ -161,7 +161,7 @@ export function BizYepApp({
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    window.location.href = '/dev-login';
+    window.location.href = 'https://www.bizyep.com.au/login';
   };
 
   if (loadError) {
@@ -1349,6 +1349,7 @@ export function BizYepApp({
           currentView={currentView}
           selectedProjectName={visibleProjects.find((p) => p.id === selectedProjectId)?.name}
           onSearchClick={() => setIsCommandPaletteOpen(true)}
+          businessName={businessName}
           userRole={currentUser.roleName}
           currentUser={currentUser}
           notifications={data.notifications.filter((n) => n.userId === 'all' || n.userId === currentUser.id)}

@@ -5,6 +5,7 @@ import {
   Bell,
   Search,
   ChevronRight,
+  Home,
   Sun,
   Moon,
   Bookmark,
@@ -18,6 +19,7 @@ interface HeaderProps {
   currentView: string;
   selectedProjectName?: string;
   onSearchClick: () => void;
+  businessName?: string | null;
   userRole: string;
   currentUser: User;
   notifications: Notification[];
@@ -32,6 +34,7 @@ export default function Header({
   currentView,
   selectedProjectName,
   onSearchClick,
+  businessName,
   userRole,
   currentUser,
   notifications,
@@ -57,8 +60,19 @@ export default function Header({
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-8 transition-all duration-300">
       {/* Breadcrumbs & View Title */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors cursor-pointer" onClick={() => onNavigate('Dashboard')}>
-          BizYep
+        <button
+          id="navbar-back-btn"
+          onClick={() => { window.location.href = 'https://www.bizyep.com.au/dashboard'; }}
+          title="Back to Dashboard"
+          className="mr-1 rounded-lg border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 transition-all duration-200 cursor-pointer"
+        >
+          <Home className="h-3.5 w-3.5" />
+        </button>
+        <span
+          className="text-xs font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors cursor-pointer"
+          onClick={() => { window.location.href = 'https://www.bizyep.com.au/dashboard'; }}
+        >
+          Project Management
         </span>
         <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-700" />
         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 capitalize">

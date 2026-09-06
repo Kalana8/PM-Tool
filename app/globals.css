@@ -5,6 +5,14 @@
    key off that class rather than Tailwind v4's default prefers-color-scheme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Site-wide font: Inter (loaded in app/layout.tsx via next/font/google as
+   --font-inter). Overriding Tailwind's font-sans theme token means every
+   existing font-sans usage — and the default body text, since font-sans is
+   Tailwind's default — picks this up with no per-component changes needed. */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
 :root {
   --background: #fafafa;
   --foreground: #171717;
