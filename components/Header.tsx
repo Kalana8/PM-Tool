@@ -14,6 +14,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { User, Notification } from '../lib/types';
+import ConfirmDialog from './ConfirmDialog';
 
 interface HeaderProps {
   currentView: string;
@@ -45,6 +46,7 @@ export default function Header({
   onSignOut
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleNotificationClick = (notif: Notification) => {
@@ -96,7 +98,7 @@ export default function Header({
           onClick={onSearchClick}
           className="hidden md:flex items-center justify-between rounded-lg bg-slate-100 dark:bg-slate-900 px-4 py-2 text-xs text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-all duration-200 w-80 text-left cursor-pointer"
         >
-          <span>Search system...</span>
+          <span>Search Pages...</span>
           <span className="opacity-50 text-[10px]">Ctrl + K</span>
         </button>
 
@@ -214,7 +216,7 @@ export default function Header({
           />
           <button
             id="sign-out-btn"
-            onClick={onSignOut}
+            onClick={() => setShowSignOutConfirm(true)}
             title="Sign Out"
             className="rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-red-500 p-2 transition-all duration-200 cursor-pointer"
           >
@@ -222,6 +224,19 @@ export default function Header({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        title="Log out?"
+        description="You'll need to sign in again to access the PM."
+        confirmLabel="Log out"
+        icon={<LogOut className="h-4 w-4" />}
+        onConfirm={() => {
+          setShowSignOutConfirm(false);
+          onSignOut();
+        }}
+        onCancel={() => setShowSignOutConfirm(false)}
+      />
     </header>
   );
 }

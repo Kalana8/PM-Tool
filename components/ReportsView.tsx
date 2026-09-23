@@ -146,17 +146,7 @@ export default function ReportsView({
 
   return (
     <div className="space-y-6 animate-fadeIn" id="reports-main-analytics">
-      {/* Title */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Enterprise Analytics Console
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Review detailed organizational performance metrics, attendance parameters, and project status trackers.
-          </p>
-        </div>
-
+      <div className="flex items-center justify-end gap-4">
         {/* Report tab controls */}
         <div className="flex rounded-xl bg-gray-50 dark:bg-gray-900 p-1 border border-gray-100 dark:border-gray-900 text-[10px] font-bold self-start sm:self-auto">
           <button

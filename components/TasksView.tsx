@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Task, User, Project, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
 import { hasAction } from '../lib/permissions';
+import ConfirmDialog from './ConfirmDialog';
 
 const STATUS_OPTIONS: TaskStatus[] = ['Todo', 'In Progress', 'Review', 'Completed', 'Cancelled'];
 const PRIORITY_OPTIONS: TaskPriority[] = ['High', 'Medium', 'Low'];
@@ -77,6 +78,7 @@ export default function TasksView({
   const [emailUserId, setEmailUserId] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [activeCategory, setActiveCategory] = useState<TaskCategory>('daily');
   const canEditProgress = hasAction(currentUser, 'tasks.edit_progress');
 
@@ -214,9 +216,7 @@ export default function TasksView({
   };
 
   const handleDeleteTaskClick = (task: Task) => {
-    if (window.confirm(`Delete task "${task.name}"? This cannot be undone.`)) {
-      onDeleteTask(task.id);
-    }
+    setTaskToDelete(task);
   };
 
   const handleCreateTask = (e: React.FormEvent) => {
@@ -303,16 +303,7 @@ export default function TasksView({
   return (
     <div className="space-y-6 animate-fadeIn" id="tasks-board-layout">
       {/* Header controls */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Operations Tasks Hub
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Organize, allocate, and archive daily sprint requirements.
-          </p>
-        </div>
-
+      <div className="flex items-center justify-end gap-4">
         <div className="flex items-center gap-2 self-start sm:self-auto">
           {/* Add Task button (Now open to Team Members and Admin/Leaders) */}
           <button
@@ -1192,6 +1183,19 @@ export default function TasksView({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!taskToDelete}
+        title="Delete task?"
+        description={`"${taskToDelete?.name ?? ''}" and its subtasks will be permanently removed.`}
+        confirmLabel="Delete"
+        icon={<Trash2 className="h-4 w-4" />}
+        onConfirm={() => {
+          if (taskToDelete) onDeleteTask(taskToDelete.id);
+          setTaskToDelete(null);
+        }}
+        onCancel={() => setTaskToDelete(null)}
+      />
     </div>
   );
 }

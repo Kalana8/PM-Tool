@@ -212,16 +212,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
 
   return (
     <div className="flex flex-col gap-6 animate-fadeIn h-[calc(100vh-120px)]" id="calendar-view-container">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Department Sprint Calendar
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Monitor direct project checkpoints, task deadlines, and team daily work.
-          </p>
-        </div>
-
+      <div className="flex items-center justify-end gap-3">
         {/* Month/Week toggle */}
         <div className="flex rounded-xl bg-gray-50 dark:bg-gray-900 p-1 border border-gray-100 dark:border-gray-900 text-xs font-bold self-start sm:self-auto">
           <button

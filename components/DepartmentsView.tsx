@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Department, User, Project, MediaFile, Task, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
 import { hasAction } from '../lib/permissions';
+import ConfirmDialog from './ConfirmDialog';
 
 interface DepartmentsViewProps {
   departments: Department[];
@@ -112,6 +113,7 @@ export default function DepartmentsView({
   // Navigation states
   const [activeDeptDetail, setActiveDeptDetail] = useState<string | null>(selectedDeptId);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
   const canSendTaskEmail = userRole === 'admin' || userRole === 'team_leader';
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailUserId, setEmailUserId] = useState('');
@@ -169,9 +171,11 @@ export default function DepartmentsView({
   };
 
   const handleDeleteDepartmentClick = (dept: Department) => {
-    if (window.confirm(`Delete "${dept.name}"? This cannot be undone.`)) {
-      onDeleteDepartment(dept.id);
-    }
+    setPendingDelete({
+      title: 'Delete department?',
+      description: `"${dept.name}" will be permanently removed. This cannot be undone.`,
+      onConfirm: () => onDeleteDepartment(dept.id)
+    });
   };
 
   // Both Admin and Team Leader can create/edit/delete projects
@@ -244,10 +248,14 @@ export default function DepartmentsView({
   };
 
   const handleDeleteProjectClick = (proj: Project) => {
-    if (window.confirm(`Delete project "${proj.name}"? This cannot be undone.`)) {
-      onDeleteProject(proj.id);
-      if (selectedProjectId === proj.id) setSelectedProjectId(null);
-    }
+    setPendingDelete({
+      title: 'Delete project?',
+      description: `"${proj.name}" will be permanently removed. This cannot be undone.`,
+      onConfirm: () => {
+        onDeleteProject(proj.id);
+        if (selectedProjectId === proj.id) setSelectedProjectId(null);
+      }
+    });
   };
 
   // Search and view filters
@@ -461,9 +469,11 @@ export default function DepartmentsView({
   };
 
   const handleDeleteTaskLocal = (task: Task) => {
-    if (window.confirm(`Delete task "${task.name}"? This cannot be undone.`)) {
-      onDeleteTask(task.id);
-    }
+    setPendingDelete({
+      title: 'Delete task?',
+      description: `"${task.name}" will be permanently removed. This cannot be undone.`,
+      onConfirm: () => onDeleteTask(task.id)
+    });
   };
 
   // Filter departments based on search
@@ -1694,6 +1704,19 @@ export default function DepartmentsView({
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={!!pendingDelete}
+          title={pendingDelete?.title ?? ''}
+          description={pendingDelete?.description ?? ''}
+          confirmLabel="Delete"
+          icon={<Trash2 className="h-4 w-4" />}
+          onConfirm={() => {
+            pendingDelete?.onConfirm();
+            setPendingDelete(null);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       </div>
     );
   }
@@ -1964,6 +1987,19 @@ export default function DepartmentsView({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={pendingDelete?.title ?? ''}
+        description={pendingDelete?.description ?? ''}
+        confirmLabel="Delete"
+        icon={<Trash2 className="h-4 w-4" />}
+        onConfirm={() => {
+          pendingDelete?.onConfirm();
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

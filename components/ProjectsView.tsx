@@ -91,15 +91,6 @@ export default function ProjectsView({
   if (!selectedProjectId || !currentProject) {
     return (
       <div className="space-y-6 animate-fadeIn" id="projects-portfolio-container">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Enterprise Initiatives Portfolio
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Browse and manage all active, scheduled, and archived cross-departmental programs.
-          </p>
-        </div>
-
         {/* Grid of Projects */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((proj) => {

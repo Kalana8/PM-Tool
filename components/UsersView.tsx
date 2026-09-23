@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { User, Department, Role, RoleBaseLevel, PendingUser } from '../lib/types';
 import { hasAction } from '../lib/permissions';
+import ConfirmDialog from './ConfirmDialog';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
 
@@ -88,6 +89,7 @@ export default function UsersView({
   const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<'link' | 'email' | 'password' | 'both' | null>(null);
   const [sendingEmailUserId, setSendingEmailUserId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const handleSendTaskEmail = async (userId: string) => {
     setSendingEmailUserId(userId);
@@ -261,15 +263,6 @@ export default function UsersView({
     setEditingUserId(null);
   };
 
-  const directoryTitle =
-    userRole === 'team_leader' ? 'My Team' : userRole === 'team_member' ? 'My Team Leader' : 'Personnel Directory';
-  const directorySubtitle =
-    userRole === 'team_leader'
-      ? 'Team Members currently assigned under your supervision.'
-      : userRole === 'team_member'
-      ? 'The Team Leader supervising your work.'
-      : 'Create, configure, and monitor all organizational Team Leaders and Team Member accounts.';
-
   const filteredUsers = scopedUsers.filter(
     (u) =>
       u.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -295,17 +288,7 @@ export default function UsersView({
 
   return (
     <div className="space-y-6 animate-fadeIn" id="users-view-panel">
-      {/* Title */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            {directoryTitle}
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {directorySubtitle}
-          </p>
-        </div>
-
+      <div className="flex items-center justify-end gap-4">
         {canAddEmployee && (
         <button
           id="open-add-user-btn"
@@ -509,11 +492,7 @@ export default function UsersView({
                         {canDeleteUsers && (
                           <button
                             id={`delete-user-btn-${u.id}`}
-                            onClick={() => {
-                              if (window.confirm(`Delete ${u.name}? This permanently removes their profile and login.`)) {
-                                onDeleteUser?.(u.id);
-                              }
-                            }}
+                            onClick={() => setUserToDelete(u)}
                             className="rounded-lg p-1.5 border border-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
                             title="Delete employee account"
                           >
@@ -1197,6 +1176,19 @@ export default function UsersView({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!userToDelete}
+        title="Delete employee?"
+        description={`${userToDelete?.name ?? 'This employee'} will be permanently removed, including their profile and login.`}
+        confirmLabel="Delete"
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={() => {
+          if (userToDelete) onDeleteUser?.(userToDelete.id);
+          setUserToDelete(null);
+        }}
+        onCancel={() => setUserToDelete(null)}
+      />
     </div>
   );
 }

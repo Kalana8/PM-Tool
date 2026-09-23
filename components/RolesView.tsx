@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Plus, Edit2, Trash, X, Users as UsersIcon } from 'lucide-react';
 import { Role, RoleBaseLevel, RolePermissions, User, PAGE_KEYS, ACTION_KEYS } from '../lib/types';
+import ConfirmDialog from './ConfirmDialog';
 
 const ACTION_LABELS: Record<string, string> = {
   'users.add': 'Add employees',
@@ -34,6 +35,7 @@ const EMPTY_PERMISSIONS: RolePermissions = { pages: [], actions: [] };
 export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDeleteRole }: RolesViewProps) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   const [name, setName] = useState('');
   const [baseLevel, setBaseLevel] = useState<RoleBaseLevel>('team_member');
@@ -130,13 +132,7 @@ export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDel
 
   return (
     <div className="space-y-6 animate-fadeIn" id="roles-view-panel">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">User Roles</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Create custom roles and control which pages and actions each one can access.
-          </p>
-        </div>
+      <div className="flex items-center justify-end gap-4">
         <button
           id="open-add-role-btn"
           onClick={openAdd}
@@ -193,9 +189,7 @@ export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDel
                       </button>
                       <button
                         id={`delete-role-btn-${role.id}`}
-                        onClick={() => {
-                          if (window.confirm(`Delete role "${role.name}"?`)) onDeleteRole(role.id);
-                        }}
+                        onClick={() => setRoleToDelete(role)}
                         disabled={role.isSystem || userCount(role.id) > 0}
                         title={role.isSystem ? 'System roles cannot be deleted' : userCount(role.id) > 0 ? 'Reassign users before deleting' : 'Delete role'}
                         className="rounded-lg p-1.5 border border-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:cursor-not-allowed"
@@ -343,6 +337,19 @@ export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDel
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!roleToDelete}
+        title="Delete role?"
+        description={`The "${roleToDelete?.name ?? ''}" role will be permanently removed.`}
+        confirmLabel="Delete"
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={() => {
+          if (roleToDelete) onDeleteRole(roleToDelete.id);
+          setRoleToDelete(null);
+        }}
+        onCancel={() => setRoleToDelete(null)}
+      />
     </div>
   );
 }

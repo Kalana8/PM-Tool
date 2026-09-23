@@ -84,34 +84,44 @@ export default function Sidebar({
       }`}
     >
       {/* Brand Header */}
-      <div className={`flex h-20 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
+      <div className={`flex h-24 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         {collapsed ? (
           <div className="dark:bg-white dark:rounded-md dark:p-1 shrink-0">
-            <img src="/logo.jpeg" alt="Logo" className="h-10 w-auto max-w-full object-contain" />
+            <img src="/logo.jpeg" alt="Logo" className="h-12 w-auto max-w-full object-contain" />
           </div>
         ) : (
-          <div className="flex flex-col justify-center">
-            <div className="dark:bg-white dark:rounded-md dark:px-1.5 dark:py-1 w-fit">
-              <img src="/logo.jpeg" alt="Logo" className="h-12 w-auto object-contain object-left" />
+          <>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="dark:bg-white dark:rounded-md dark:px-1.5 dark:py-1 w-fit shrink-0">
+                <img src="/logo.jpeg" alt="Logo" className="h-14 w-auto object-contain object-left" />
+              </div>
+              <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
+              <span className="text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">
+                PM
+              </span>
             </div>
-            <span className="text-[10px] font-semibold tracking-wide text-slate-400 dark:text-slate-500 uppercase mt-0.5">
-              Project Management
-            </span>
-          </div>
+            <button
+              id="sidebar-collapse-toggle"
+              onClick={onToggleCollapsed}
+              title="Collapse sidebar"
+              className="flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors cursor-pointer shrink-0"
+            >
+              <PanelLeftClose className="h-4.5 w-4.5" />
+            </button>
+          </>
         )}
       </div>
 
-      {/* Collapse/Expand Toggle */}
-      <button
-        id="sidebar-collapse-toggle"
-        onClick={onToggleCollapsed}
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className={`flex items-center justify-end py-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-900 transition-colors cursor-pointer ${
-          collapsed ? 'px-2' : 'px-4'
-        }`}
-      >
-        {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
-      </button>
+      {collapsed && (
+        <button
+          id="sidebar-collapse-toggle"
+          onClick={onToggleCollapsed}
+          title="Expand sidebar"
+          className="flex items-center justify-center py-2.5 px-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-900 transition-colors cursor-pointer"
+        >
+          <PanelLeftOpen className="h-4.5 w-4.5" />
+        </button>
+      )}
 
       {/* User Role Badge */}
       {!collapsed && (
