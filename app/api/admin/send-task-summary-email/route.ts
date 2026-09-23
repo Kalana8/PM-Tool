@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBusiness } from "@/lib/get-active-business";
+import { isDemoSession, DEMO_EMAIL_BLOCKED } from "@/lib/demo-guard";
 import type { Database } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -55,6 +56,10 @@ interface ExtraSubtaskRow {
  * the Supabase service-role client.
  */
 export async function POST(request: Request) {
+  if (await isDemoSession()) {
+    return NextResponse.json({ error: DEMO_EMAIL_BLOCKED }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   const userId = body?.userId as string | undefined;
   if (!userId) {
