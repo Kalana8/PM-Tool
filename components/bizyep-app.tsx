@@ -1484,11 +1484,6 @@ export function BizYepApp({
 
           {currentView === 'Attendance' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Attendance Database Logs</h2>
-                <p className="text-xs text-gray-500 mt-1">Real-time check-in and checkout registers across all departmental team units.</p>
-              </div>
-
               <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm overflow-x-auto">
                 <table className="w-full text-left text-xs text-gray-500">
                   <thead className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-900">
@@ -1597,11 +1592,6 @@ export function BizYepApp({
 
           {currentView === 'Settings' && (
             <div className="space-y-6 max-w-2xl">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Enterprise Settings</h2>
-                <p className="text-xs text-gray-500 mt-1">Configure profile security credentials, interface templates, and notifications.</p>
-              </div>
-
               <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm space-y-6">
                 <div className="flex items-center gap-4 border-b border-gray-100 dark:border-gray-900 pb-5">
                   <img src={currentUser.avatar} alt={currentUser.name} className="h-12 w-12 rounded-full object-cover" />

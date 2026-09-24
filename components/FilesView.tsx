@@ -66,15 +66,6 @@ export default function FilesView({
 
   return (
     <div className="space-y-6 animate-fadeIn" id="files-view-container">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-          Corporate Shared Library
-        </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Review, filter, and archive cross-departmental media assets, videos, and specifications.
-        </p>
-      </div>
-
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Left column sidebar filters */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-5 shadow-sm space-y-5 h-fit">

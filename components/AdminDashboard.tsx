@@ -2,15 +2,11 @@
 
 import React, { useState } from 'react';
 import {
-  Users,
   Clock,
-  Briefcase,
-  CheckCircle2,
   TrendingUp,
   FolderDot,
   Calendar,
   ArrowUpRight,
-  UserCheck,
   AlertTriangle,
   History,
   Activity
@@ -43,20 +39,15 @@ export default function AdminDashboard({
   const totalEmployees = users.filter(u => u.baseLevel === 'team_member').length;
   const activeLeaders = users.filter(u => u.baseLevel === 'team_leader').length;
   const totalProjects = projects.length;
-  const completedProjects = projects.filter(p => p.status === 'Completed').length;
-  const activeProjects = projects.filter(p => p.status === 'In Progress').length;
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'Completed').length;
-  const pendingTasks = tasks.filter(t => t.status !== 'Completed').length;
   const taskCompletionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Attendance stats for today
   const todayStr = todayISODate();
   const checkedInToday = attendance.filter(a => a.date === todayStr);
   const presentCount = checkedInToday.length;
-  const lateCount = checkedInToday.filter(a => a.status === 'Late').length;
-  const attendancePercentage = totalEmployees ? Math.round((presentCount / totalEmployees) * 100) : 0;
 
   // Custom Chart Data: Weekly Attendance Breakdown (July 1 - July 7)
   const chartData = [
@@ -207,24 +198,6 @@ export default function AdminDashboard({
 
   return (
     <div className="space-y-8 animate-fadeIn" id="admin-dashboard-container">
-      {/* Title block */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Operations Console
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Real-time corporate analytics, active departments, and system-wide task statistics.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-gray-50 dark:bg-gray-900/60 p-1.5 border border-gray-100 dark:border-gray-900 self-start md:self-auto">
-          <Calendar className="h-4 w-4 text-gray-400 ml-1.5" />
-          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 pr-2">
-            Today: Tuesday, July 7, 2026
-          </span>
-        </div>
-      </div>
-
       {/* Pending Approvals banner */}
       {pendingUserCount > 0 && (
         <button
@@ -247,96 +220,40 @@ export default function AdminDashboard({
 
       {/* Grid: Main KPI Cards */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {/* KPI 1 */}
-        <div className="relative rounded-2xl border border-gray-100 dark:border-gray-900/50 bg-white dark:bg-gray-950 p-6 shadow-sm transition-all duration-300 hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Staff Presence
-            </span>
-            <div className="rounded-xl bg-blue-50 dark:bg-blue-950/40 p-2 text-blue-600 dark:text-blue-400">
-              <UserCheck className="h-4.5 w-4.5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {presentCount}/{totalEmployees}
-            </span>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
-              {attendancePercentage}% Active
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            {lateCount} late check-ins recorded today.
-          </p>
+        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-sm">
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {presentCount}/{totalEmployees}
+          </span>
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">
+            Staff Presence
+          </span>
         </div>
 
-        {/* KPI 2 */}
-        <div className="relative rounded-2xl border border-gray-100 dark:border-gray-900/50 bg-white dark:bg-gray-950 p-6 shadow-sm transition-all duration-300 hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Total Portfolios
-            </span>
-            <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 p-2 text-indigo-600 dark:text-indigo-400">
-              <Briefcase className="h-4.5 w-4.5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {totalProjects}
-            </span>
-            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30">
-              {activeProjects} In Progress
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            {completedProjects} projects achieved archive success.
-          </p>
+        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-sm">
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {totalProjects}
+          </span>
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">
+            Total Portfolios
+          </span>
         </div>
 
-        {/* KPI 3 */}
-        <div className="relative rounded-2xl border border-gray-100 dark:border-gray-900/50 bg-white dark:bg-gray-950 p-6 shadow-sm transition-all duration-300 hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Task Completion
-            </span>
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-2 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-4.5 w-4.5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {taskCompletionRate}%
-            </span>
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
-              {completedTasks}/{totalTasks} Done
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            {pendingTasks} remaining tasks in progress.
-          </p>
+        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-sm">
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {taskCompletionRate}%
+          </span>
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">
+            Task Completion
+          </span>
         </div>
 
-        {/* KPI 4 */}
-        <div className="relative rounded-2xl border border-gray-100 dark:border-gray-900/50 bg-white dark:bg-gray-950 p-6 shadow-sm transition-all duration-300 hover:shadow-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Operations Lead
-            </span>
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 p-2 text-amber-600 dark:text-amber-400">
-              <Users className="h-4.5 w-4.5" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {activeLeaders} Leads
-            </span>
-            <span className="text-xs font-semibold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-900/30">
-              Active
-            </span>
-          </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
-            Distributed over {departments.length} departments.
-          </p>
+        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-gray-950 p-6 shadow-sm">
+          <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {activeLeaders}
+          </span>
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">
+            Operations Lead
+          </span>
         </div>
       </div>
 
@@ -347,7 +264,6 @@ export default function AdminDashboard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-900 pb-4 mb-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Enterprise Tickers</h3>
-              <p className="text-[11px] text-gray-400">Interactive trends showing daily staff counts and task velocities.</p>
             </div>
             <div className="flex rounded-xl bg-gray-50 dark:bg-gray-900 p-1 border border-gray-100 dark:border-gray-900 text-[10px] font-semibold">
               <button
@@ -385,7 +301,6 @@ export default function AdminDashboard({
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Critical Milestones</h3>
-              <p className="text-[10px] text-gray-400">Deadlines approaching priority bounds.</p>
             </div>
             <button
               id="view-all-tasks-btn"
@@ -431,7 +346,6 @@ export default function AdminDashboard({
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Active Strategic Portfolios</h3>
-              <p className="text-[10px] text-gray-400">Initiatives nearing mid-to-high velocity.</p>
             </div>
             <button
               id="view-all-projects-btn"
@@ -494,7 +408,6 @@ export default function AdminDashboard({
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-900 pb-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Departments</h3>
-              <p className="text-[10px] text-gray-400">Department distribution stats.</p>
             </div>
             <button
               id="view-all-depts-btn"
