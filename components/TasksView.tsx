@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Task, User, Project, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
 import { hasAction } from '../lib/permissions';
+import { addDaysISODate } from '../lib/date';
 import ConfirmDialog from './ConfirmDialog';
 
 const STATUS_OPTIONS: TaskStatus[] = ['Todo', 'In Progress', 'Review', 'Completed', 'Cancelled'];
@@ -169,9 +170,9 @@ export default function TasksView({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('Medium');
   const [assignedTo, setAssignedTo] = useState('');
-  const [startDate, setStartDate] = useState('2026-07-08');
+  const [startDate, setStartDate] = useState(() => addDaysISODate(0));
   const [startTime, setStartTime] = useState('09:00');
-  const [dueDate, setDueDate] = useState('2026-07-15');
+  const [dueDate, setDueDate] = useState(() => addDaysISODate(7));
   const [dueTime, setDueTime] = useState('18:00');
   const [dueDays, setDueDays] = useState(7);
 
@@ -186,9 +187,9 @@ export default function TasksView({
     setCategory(activeCategory);
     setDescription('');
     setPriority('Medium');
-    setStartDate('2026-07-08');
+    setStartDate(addDaysISODate(0));
     setStartTime('09:00');
-    setDueDate('2026-07-15');
+    setDueDate(addDaysISODate(7));
     setDueTime('18:00');
     setDueDays(7);
     if (userRole === 'team_member' && currentUserId) {
@@ -207,7 +208,7 @@ export default function TasksView({
     setDescription(task.description);
     setPriority(task.priority);
     setAssignedTo(task.assignedTo);
-    setStartDate(task.startDate || '2026-07-08');
+    setStartDate(task.startDate || addDaysISODate(0));
     setStartTime(task.startTime || '09:00');
     setDueDate(task.dueDate);
     setDueTime(task.dueTime || '18:00');

@@ -1540,6 +1540,7 @@ export function BizYepApp({
               users={visibleUsers}
               projects={visibleProjects}
               tasks={visibleTasks}
+              attendance={visibleAttendance}
             />
           )}
 
@@ -1682,7 +1683,24 @@ export function BizYepApp({
                       </button>
                     </div>
                   ) : (
-                    <p className="text-[10px] text-gray-400 italic">Not available yet (this business has no login slug configured).</p>
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+                      <span className="flex-1 text-[10px] text-gray-400 italic">Not available yet (this business has no login slug configured).</span>
+                      {userRole === 'admin' && businessName && (
+                        <button
+                          id="generate-login-link-btn"
+                          disabled={savingBusinessName}
+                          onClick={async () => {
+                            setSavingBusinessName(true);
+                            const ok = await handleSaveBusinessName(businessName);
+                            setSavingBusinessName(false);
+                            if (!ok) return;
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:underline disabled:opacity-60 shrink-0"
+                        >
+                          {savingBusinessName ? 'Generating...' : 'Generate Link'}
+                        </button>
+                      )}
+                    </div>
                   )}
                   <p className="text-[9px] text-gray-400 mt-1">Bookmark this link — it&apos;s where you (and every employee at {businessName || 'your company'}) sign in.</p>
                 </div>

@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Project Management",
+  title: "BizYep - PM",
   description: "Business tool platform",
 };
 

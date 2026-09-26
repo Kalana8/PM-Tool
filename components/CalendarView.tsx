@@ -122,7 +122,10 @@ export default function CalendarView({ tasks, users, projects, userRole, current
 
   // Single source of truth for the "currently focused" day - drives both the
   // month grid and the week grid, and carries over when switching view modes.
-  const [focusedDate, setFocusedDate] = useState<Date>(() => makeLocalDate(2026, 6, 7)); // July 7, 2026
+  const [focusedDate, setFocusedDate] = useState<Date>(() => {
+    const now = new Date();
+    return makeLocalDate(now.getFullYear(), now.getMonth(), now.getDate());
+  });
   const focusedDateStr = formatDateStr(focusedDate);
 
   const viewedYear = focusedDate.getFullYear();

@@ -49,18 +49,29 @@ export default function AdminDashboard({
   const checkedInToday = attendance.filter(a => a.date === todayStr);
   const presentCount = checkedInToday.length;
 
-  // Custom Chart Data: Weekly Attendance Breakdown (July 1 - July 7)
-  const chartData = [
-    { label: 'Mon 07/01', present: 5, target: 5, tasks: 4 },
-    { label: 'Tue 07/02', present: 4, target: 5, tasks: 6 },
-    { label: 'Wed 07/03', present: 5, target: 5, tasks: 5 },
-    { label: 'Thu 07/04', present: 5, target: 5, tasks: 8 },
-    { label: 'Fri 07/05', present: 3, target: 5, tasks: 9 },
-    { label: 'Mon 07/06', present: 4, target: 5, tasks: 7 },
-    { label: 'Tue 07/07', present: presentCount, target: 5, tasks: completedTasks }
-  ];
+  // Weekly Chart Data: last 7 calendar days, computed live from attendance & tasks
+  const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
 
-  const maxVal = selectedChartTab === 'attendance' ? 6 : 10;
+  const chartData = last7Days.map((d) => {
+    const iso = d.toISOString().slice(0, 10);
+    const dayPresent = attendance.filter(a => a.date === iso && a.status !== 'Absent').length;
+    const dayCompletedTasks = tasks.filter(t => t.status === 'Completed' && t.dueDate === iso).length;
+    return {
+      label: `${WEEKDAY_LABELS[d.getDay()]} ${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`,
+      present: dayPresent,
+      target: totalEmployees,
+      tasks: dayCompletedTasks
+    };
+  });
+
+  const maxVal = selectedChartTab === 'attendance'
+    ? Math.max(totalEmployees, ...chartData.map(d => d.present), 1)
+    : Math.max(...chartData.map(d => d.tasks), 1);
 
   // Custom SVG Chart helper
   const renderSVGChart = () => {
