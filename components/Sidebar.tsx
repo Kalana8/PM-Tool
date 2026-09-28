@@ -86,20 +86,30 @@ export default function Sidebar({
       {/* Brand Header */}
       <div className={`flex h-16 items-center border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 ${collapsed ? 'justify-center px-2' : 'justify-between px-3'}`}>
         {collapsed ? (
-          <div className="shrink-0">
-            <img src="/bizyep-icon-square.png" alt="BizYep" className="h-9 w-9 object-contain" />
-          </div>
+          <button
+            id="sidebar-logo-home-btn"
+            onClick={() => { window.location.href = 'https://www.bizyep.com.au/dashboard'; }}
+            title="Back to Dashboard"
+            className="shrink-0 cursor-pointer"
+          >
+            <img src="/bizyep-icon-square.png" alt="BizYep" className="h-7 w-7 object-contain" />
+          </button>
         ) : (
           <>
-            <div className="flex items-center gap-2 min-w-0">
+            <button
+              id="sidebar-logo-home-btn"
+              onClick={() => { window.location.href = 'https://www.bizyep.com.au/dashboard'; }}
+              title="Back to Dashboard"
+              className="flex items-center gap-2 min-w-0 cursor-pointer"
+            >
               <div className="w-fit shrink-0">
-                <img src="/bizyep-logo.png" alt="BizYep" className="h-9 w-auto object-contain object-left" />
+                <img src="/bizyep-logo.png" alt="BizYep" className="h-7 w-auto object-contain object-left" />
               </div>
               <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
               <span className="text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">
                 PM
               </span>
-            </div>
+            </button>
             <button
               id="sidebar-collapse-toggle"
               onClick={onToggleCollapsed}

@@ -537,7 +537,7 @@ export default function UsersView({
 
               <form id="add-user-form" onSubmit={handleAddUserSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Full Name</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Full Name <span className="text-red-500">*</span></label>
                   <input
                     id="user-name-input"
                     type="text"
@@ -550,7 +550,7 @@ export default function UsersView({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Email Coordinates</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Email Coordinates <span className="text-red-500">*</span></label>
                   <input
                     id="user-email-input"
                     type="email"
@@ -564,7 +564,7 @@ export default function UsersView({
 
                 {canManageLogin && (
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Login Password</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Login Password <span className="text-red-500">*</span></label>
                     <input
                       id="user-password-input"
                       type="password"
@@ -605,7 +605,7 @@ export default function UsersView({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold font-semibold">Department</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold font-semibold">Department <span className="text-red-500">*</span></label>
                     <select
                       id="user-department-select"
                       required
@@ -646,7 +646,7 @@ export default function UsersView({
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title <span className="text-red-500">*</span></label>
                   <input
                     id="user-title-input"
                     type="text"
@@ -733,7 +733,7 @@ export default function UsersView({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department <span className="text-red-500">*</span></label>
                     <select
                       id="categorize-department-select"
                       required
@@ -769,7 +769,7 @@ export default function UsersView({
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title <span className="text-red-500">*</span></label>
                   <input
                     id="categorize-title-input"
                     type="text"
@@ -826,7 +826,7 @@ export default function UsersView({
 
                 <form id="edit-user-form" onSubmit={handleEditSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Full Name</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Full Name <span className="text-red-500">*</span></label>
                     <input
                       id="edit-name-input"
                       type="text"
@@ -858,7 +858,7 @@ export default function UsersView({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department <span className="text-red-500">*</span></label>
                       <select
                         id="edit-department-select"
                         required
@@ -894,7 +894,7 @@ export default function UsersView({
                   )}
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Designated Title <span className="text-red-500">*</span></label>
                     <input
                       id="edit-title-input"
                       type="text"
@@ -1026,14 +1026,6 @@ export default function UsersView({
                 <div className="flex justify-between gap-4">
                   <dt className="text-gray-400 font-semibold">Status</dt>
                   <dd className="text-gray-800 dark:text-gray-200 text-right">{viewedUser.status}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-gray-400 font-semibold">Performance Score</dt>
-                  <dd className="text-gray-800 dark:text-gray-200 text-right">{viewedUser.performanceScore}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-gray-400 font-semibold">UID</dt>
-                  <dd className="text-gray-400 font-mono text-right">{viewedUser.id}</dd>
                 </div>
                 {viewedUser.employeeCode && (
                   <div className="flex justify-between gap-4">

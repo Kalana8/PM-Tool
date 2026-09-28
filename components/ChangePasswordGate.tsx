@@ -63,7 +63,7 @@ export function ChangePasswordGate({ userId, name }: { userId: string; name: str
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">New Password</label>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">New Password <span className="text-red-500">*</span></label>
             <input
               id="new-password-input"
               type="password"
@@ -77,7 +77,7 @@ export function ChangePasswordGate({ userId, name }: { userId: string; name: str
             />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Confirm Password</label>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Confirm Password <span className="text-red-500">*</span></label>
             <input
               id="confirm-password-input"
               type="password"
