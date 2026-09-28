@@ -625,7 +625,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                 {/* Left: task fields */}
                 <div className="space-y-3.5 md:w-72 shrink-0">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title <span className="text-red-500">*</span></label>
                     <input
                       id="quick-task-title-input"
                       type="text"
@@ -638,7 +638,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Target Project</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Target Project <span className="text-red-500">*</span></label>
                     <select
                       id="quick-task-project-select"
                       required
@@ -654,7 +654,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Staff Assignee</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Staff Assignee <span className="text-red-500">*</span></label>
                     <select
                       id="quick-task-assignee-select"
                       required
@@ -672,7 +672,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
                   {/* Teams-style start/due date & time scheduling */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date <span className="text-red-500">*</span></label>
                       <input
                         id="quick-task-startdate-input"
                         type="date"
@@ -697,7 +697,7 @@ export default function CalendarView({ tasks, users, projects, userRole, current
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date <span className="text-red-500">*</span></label>
                       <input
                         id="quick-task-duedate-input"
                         type="date"

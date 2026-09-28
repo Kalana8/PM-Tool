@@ -65,6 +65,7 @@ import ReportsView from './ReportsView';
 import UsersView from './UsersView';
 import RolesView from './RolesView';
 import FilesView from './FilesView';
+import LoadingSpinner from './LoadingSpinner';
 import { Loader2, Copy, Check } from 'lucide-react';
 import { todayISODate } from '@/lib/date';
 
@@ -107,7 +108,12 @@ export function BizYepApp({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Layout states
-  const [currentView, setCurrentView] = useState<string>('Dashboard');
+  // currentView lives in React state, not the URL, so restore the page that
+  // was open before a refresh. Safe to read here: until `data` loads, only the
+  // spinner renders, so server and client markup match.
+  const [currentView, setCurrentView] = useState<string>(() =>
+    typeof window === 'undefined' ? 'Dashboard' : sessionStorage.getItem('currentView') || 'Dashboard'
+  );
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -142,6 +148,7 @@ export function BizYepApp({
     };
     window.addEventListener('keydown', handleKeyDown);
 
+
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
@@ -153,6 +160,10 @@ export function BizYepApp({
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    sessionStorage.setItem('currentView', currentView);
+  }, [currentView]);
 
   const updateData = (newData: AppData) => {
     setData(newData);
@@ -170,10 +181,9 @@ export function BizYepApp({
 
   if (!data) {
     return (
-      <FullScreenMessage
-        icon={<Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />}
-        title="Bootstrapping Enterprise Workspace..."
-      />
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <LoadingSpinner />
+      </div>
     );
   }
 
@@ -1245,15 +1255,28 @@ export function BizYepApp({
   };
 
   const handleToggleDarkMode = () => {
+    const root = document.documentElement;
+    // Momentarily kill every transition so cards/panels with their own
+    // hover-transition durations don't visibly lag behind the rest of the
+    // page when the theme flips — see the .theme-transition-off rule.
+    root.classList.add('theme-transition-off');
+
     const nextDark = !darkMode;
     setDarkMode(nextDark);
     if (nextDark) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+
+    // Force layout so the class changes above are committed before
+    // transitions are re-enabled on the next frame.
+    root.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      root.classList.remove('theme-transition-off');
+    });
   };
 
   const handleSearchNavigate = (view: string, id?: string) => {

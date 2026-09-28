@@ -6,9 +6,12 @@ import type { SupabaseClient, User as AuthUser } from "@supabase/supabase-js";
 // Auth only ever hands us an email at JIT-provision time (no signup form of
 // our own to collect a real name from) — falling back to the raw email as
 // "name" leaked it as-is into the avatar initial, header and every table.
-// Prefer a name the portal's signup may have captured in user_metadata, else
+// Prefer the name from the main site's profile (public.profiles.full_name),
+// then one the portal's signup may have captured in user_metadata, else
 // turn "jane.doe97@x.com" into "Jane Doe97" instead of showing the address.
-function deriveDisplayName(user: AuthUser): string {
+function deriveDisplayName(user: AuthUser, mainSiteName?: string | null): string {
+  if (mainSiteName?.trim()) return mainSiteName.trim();
+
   const metaName = (user.user_metadata?.full_name || user.user_metadata?.name) as string | undefined;
   if (metaName?.trim()) return metaName.trim();
 
@@ -39,6 +42,18 @@ export async function getCurrentProfile() {
   if (!ctx?.businessId) return { ctx, profile: null };
 
   const supabase = (await createClient()) as unknown as SupabaseClient<Database, "pm">;
+
+  // The profile photo/name people actually set live on the main site
+  // (public.profiles, portal-owned), not in this tool's own pm.users row —
+  // always prefer it over whatever's cached locally so the PM tool's header
+  // shows the same avatar as the main site instead of its own placeholder.
+  const { data: mainSiteProfile } = await supabase
+    .schema("public")
+    .from("profiles")
+    .select("full_name, avatar_url")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
   const { data: existing } = await supabase
     .from("users")
     .select("*, roles(id, name, base_level, permissions)")
@@ -46,7 +61,12 @@ export async function getCurrentProfile() {
     .eq("business_id", ctx.businessId)
     .maybeSingle();
 
-  if (existing) return { ctx, profile: existing };
+  if (existing) {
+    return {
+      ctx,
+      profile: mainSiteProfile?.avatar_url ? { ...existing, avatar: mainSiteProfile.avatar_url } : existing,
+    };
+  }
 
   // Roles are seeded lazily on first visit rather than by a DB trigger,
   // since businesses created before the roles table existed (and any new
@@ -74,8 +94,9 @@ export async function getCurrentProfile() {
       id: `user-${ctx.user.id}`,
       business_id: ctx.businessId,
       auth_id: ctx.user.id,
-      name: deriveDisplayName(ctx.user),
+      name: deriveDisplayName(ctx.user, mainSiteProfile?.full_name),
       email: ctx.user.email ?? `${ctx.user.id}@unknown`,
+      avatar: mainSiteProfile?.avatar_url ?? "",
       role_id: roleId,
     })
     .select("*, roles(id, name, base_level, permissions)")

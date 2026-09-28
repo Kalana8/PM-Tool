@@ -225,7 +225,7 @@ export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDel
 
               <form id="add-role-form" onSubmit={handleAddSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Role Name</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Role Name <span className="text-red-500">*</span></label>
                   <input
                     id="role-name-input"
                     type="text"
@@ -298,7 +298,7 @@ export default function RolesView({ roles, users, onAddRole, onUpdateRole, onDel
 
               <form id="edit-role-form" onSubmit={handleEditSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Role Name</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Role Name <span className="text-red-500">*</span></label>
                   <input
                     id="edit-role-name-input"
                     type="text"

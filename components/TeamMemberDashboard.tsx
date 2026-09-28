@@ -421,7 +421,7 @@ export default function TeamMemberDashboard({
           <form onSubmit={handleDailyLogSubmit} className="space-y-4 animate-fadeIn">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1">Today accomplishments</label>
+                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1">Today accomplishments <span className="text-red-500">*</span></label>
                 <textarea
                   id="worklog-done-input"
                   required

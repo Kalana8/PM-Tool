@@ -787,7 +787,7 @@ export default function TasksView({
               {/* Form elements */}
               <form id="add-task-form" onSubmit={handleCreateTask} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Task Title <span className="text-red-500">*</span></label>
                   <input
                     id="task-title-input"
                     type="text"
@@ -830,7 +830,7 @@ export default function TasksView({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Target Project</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Target Project <span className="text-red-500">*</span></label>
                     <select
                       id="task-project-select"
                       required
@@ -846,7 +846,7 @@ export default function TasksView({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Staff Assignee</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 font-semibold">Staff Assignee <span className="text-red-500">*</span></label>
                     <select
                       id="task-assignee-select"
                       required
@@ -864,7 +864,7 @@ export default function TasksView({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Date <span className="text-red-500">*</span></label>
                     <input
                       id="task-startdate-input"
                       type="date"
@@ -875,7 +875,7 @@ export default function TasksView({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Time</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Start Time <span className="text-red-500">*</span></label>
                     <input
                       id="task-starttime-input"
                       type="time"
@@ -889,7 +889,7 @@ export default function TasksView({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Date <span className="text-red-500">*</span></label>
                     <input
                       id="task-duedate-input"
                       type="date"
@@ -900,7 +900,7 @@ export default function TasksView({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Time</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due Time <span className="text-red-500">*</span></label>
                     <input
                       id="task-duetime-input"
                       type="time"
@@ -913,7 +913,7 @@ export default function TasksView({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due In (Days)</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Due In (Days) <span className="text-red-500">*</span></label>
                   <input
                     id="task-duedays-input"
                     type="number"
