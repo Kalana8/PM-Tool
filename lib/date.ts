@@ -6,3 +6,13 @@
 export function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+// today + N days, as a local calendar date — used for date-input defaults
+// (add-task/add-project forms) so the native picker opens on the current
+// month instead of a fixed demo date baked into the initial state.
+export function addDaysISODate(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

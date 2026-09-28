@@ -385,7 +385,6 @@ export default function UsersView({
                         <img src={u.avatar} alt={u.name} className="h-9 w-9 rounded-full object-cover border border-gray-100/60" />
                         <div>
                           <p className="font-bold text-gray-950 dark:text-gray-100 leading-tight">{u.name}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">UID: {u.id}</p>
                           {u.employeeCode && <p className="text-[10px] text-gray-400 mt-0.5">Employee Code: {u.employeeCode}</p>}
                         </div>
                       </div>

@@ -1,7 +1,27 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBusiness } from "@/lib/get-active-business";
 import type { Database } from "@/types/database";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User as AuthUser } from "@supabase/supabase-js";
+
+// Auth only ever hands us an email at JIT-provision time (no signup form of
+// our own to collect a real name from) — falling back to the raw email as
+// "name" leaked it as-is into the avatar initial, header and every table.
+// Prefer a name the portal's signup may have captured in user_metadata, else
+// turn "jane.doe97@x.com" into "Jane Doe97" instead of showing the address.
+function deriveDisplayName(user: AuthUser): string {
+  const metaName = (user.user_metadata?.full_name || user.user_metadata?.name) as string | undefined;
+  if (metaName?.trim()) return metaName.trim();
+
+  const localPart = user.email?.split("@")[0];
+  if (!localPart) return "New user";
+
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 /**
  * Resolves the signed-in user's pm.users profile for their active business,
@@ -54,7 +74,7 @@ export async function getCurrentProfile() {
       id: `user-${ctx.user.id}`,
       business_id: ctx.businessId,
       auth_id: ctx.user.id,
-      name: ctx.user.email ?? "New user",
+      name: deriveDisplayName(ctx.user),
       email: ctx.user.email ?? `${ctx.user.id}@unknown`,
       role_id: roleId,
     })

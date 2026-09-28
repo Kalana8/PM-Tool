@@ -14,28 +14,39 @@ import {
   Layers,
   FileCheck2
 } from 'lucide-react';
-import { Department, User, Project, Task } from '../lib/types';
+import { Department, User, Project, Task, Attendance } from '../lib/types';
 
 interface ReportsViewProps {
   departments: Department[];
   users: User[];
   projects: Project[];
   tasks: Task[];
+  attendance: Attendance[];
 }
+
+// Cycled by department index so the report scales to however many departments exist.
+// Classes are spelled out in full (not built with template strings) so Tailwind's
+// JIT scanner can find them in this file.
+const DEPT_COLORS = [
+  { bg: 'bg-indigo-500', fill: 'fill-indigo-500' },
+  { bg: 'bg-amber-500', fill: 'fill-amber-500' },
+  { bg: 'bg-rose-500', fill: 'fill-rose-500' },
+  { bg: 'bg-emerald-500', fill: 'fill-emerald-500' },
+  { bg: 'bg-sky-500', fill: 'fill-sky-500' },
+  { bg: 'bg-purple-500', fill: 'fill-purple-500' },
+  { bg: 'bg-orange-500', fill: 'fill-orange-500' },
+  { bg: 'bg-teal-500', fill: 'fill-teal-500' }
+];
+const PERFORMANCE_TARGET = 85; // organizational baseline sprint score
 
 export default function ReportsView({
   departments,
   users,
   projects,
-  tasks
+  tasks,
+  attendance
 }: ReportsViewProps) {
   const [activeTab, setActiveTab] = useState<'performance' | 'attendance' | 'projects'>('performance');
-
-  // Calculate report metrics
-  const webMembers = users.filter((u) => u.departmentId === 'dept-webdev');
-  const designMembers = users.filter((u) => u.departmentId === 'dept-uiux');
-  const qaMembers = users.filter((u) => u.departmentId === 'dept-qa');
-  const marketingMembers = users.filter((u) => u.departmentId === 'dept-marketing');
 
   const getAvgScore = (members: User[]) => {
     if (members.length === 0) return 0;
@@ -43,12 +54,26 @@ export default function ReportsView({
     return Math.round(sum / members.length);
   };
 
-  const performanceReports = [
-    { name: 'Web Development', code: 'WEBDEV', score: getAvgScore(webMembers), target: 90, color: 'bg-indigo-500' },
-    { name: 'UI/UX Design', code: 'UIUX', score: getAvgScore(designMembers), target: 95, color: 'bg-amber-500' },
-    { name: 'QA Testing', code: 'QA', score: getAvgScore(qaMembers), target: 88, color: 'bg-rose-500' },
-    { name: 'Digital Marketing', code: 'MKT', score: getAvgScore(marketingMembers), target: 85, color: 'bg-emerald-500' }
-  ];
+  // Calculate report metrics live from the actual department roster
+  const performanceReports = departments.map((dept, idx) => {
+    const deptMembers = users.filter((u) => u.departmentId === dept.id);
+    return {
+      name: dept.name,
+      code: dept.code,
+      score: getAvgScore(deptMembers),
+      target: PERFORMANCE_TARGET,
+      color: DEPT_COLORS[idx % DEPT_COLORS.length].bg
+    };
+  });
+
+  // Attendance rate per department, computed from real check-in records
+  const attendanceByDept = departments.map((dept, idx) => {
+    const deptUserIds = new Set(users.filter((u) => u.departmentId === dept.id).map((u) => u.id));
+    const deptAttendance = attendance.filter((a) => deptUserIds.has(a.userId));
+    const presentCount = deptAttendance.filter((a) => a.status !== 'Absent').length;
+    const pct = deptAttendance.length ? Math.round((presentCount / deptAttendance.length) * 100) : 0;
+    return { label: dept.code, pct, color: DEPT_COLORS[idx % DEPT_COLORS.length].fill };
+  });
 
   // Render SVG Performance comparisons
   const renderPerformanceChart = () => {
@@ -206,13 +231,9 @@ export default function ReportsView({
                 })}
 
                 {/* Vertical column bars */}
-                {[
-                  { label: 'Web Dev', pct: 94, color: 'fill-indigo-500' },
-                  { label: 'UI/UX', pct: 98, color: 'fill-amber-500' },
-                  { label: 'QA Team', pct: 90, color: 'fill-rose-500' },
-                  { label: 'Marketing', pct: 88, color: 'fill-emerald-500' }
-                ].map((col, idx) => {
-                  const x = 70 + idx * 110;
+                {attendanceByDept.map((col, idx) => {
+                  const columnWidth = (480 - 40) / attendanceByDept.length;
+                  const x = 40 + idx * columnWidth + (columnWidth - 34) / 2;
                   const barHeight = (col.pct / 100) * 140;
                   const y = 150 - barHeight;
 

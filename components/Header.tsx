@@ -202,10 +202,10 @@ export default function Header({
         <div className="flex items-center gap-3 border-l border-gray-200 dark:border-gray-800 pl-4">
           <div className="hidden lg:block text-right">
             <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 leading-tight">
-              {currentUser.name}
+              {currentUser.email}
             </p>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-              {currentUser.title}
+              {userRole}
             </p>
           </div>
           <img

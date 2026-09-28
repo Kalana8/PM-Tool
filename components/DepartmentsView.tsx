@@ -25,6 +25,7 @@ import {
   Mail
 } from 'lucide-react';
 import { Department, User, Project, MediaFile, Task, TaskStatus, TaskPriority, TaskCategory, Subtask, RoleBaseLevel } from '../lib/types';
+import { addDaysISODate } from '../lib/date';
 import { hasAction } from '../lib/permissions';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -186,8 +187,8 @@ export default function DepartmentsView({
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projName, setProjName] = useState('');
   const [projDescription, setProjDescription] = useState('');
-  const [projStartDate, setProjStartDate] = useState('2026-07-08');
-  const [projDeadline, setProjDeadline] = useState('2026-08-08');
+  const [projStartDate, setProjStartDate] = useState(() => addDaysISODate(0));
+  const [projDeadline, setProjDeadline] = useState(() => addDaysISODate(30));
   const [projStatus, setProjStatus] = useState<Project['status']>('Planning');
   const [projOwnerId, setProjOwnerId] = useState('');
   const [projAssigneeId, setProjAssigneeId] = useState('');
@@ -196,8 +197,8 @@ export default function DepartmentsView({
     setEditingProjectId(null);
     setProjName('');
     setProjDescription('');
-    setProjStartDate('2026-07-08');
-    setProjDeadline('2026-08-08');
+    setProjStartDate(addDaysISODate(0));
+    setProjDeadline(addDaysISODate(30));
     setProjStatus('Planning');
     setProjOwnerId(userRole === 'team_leader' && currentUserId ? currentUserId : '');
     setProjAssigneeId('');
@@ -208,7 +209,7 @@ export default function DepartmentsView({
     setEditingProjectId(proj.id);
     setProjName(proj.name);
     setProjDescription(proj.description);
-    setProjStartDate(proj.startDate || '2026-07-08');
+    setProjStartDate(proj.startDate || addDaysISODate(0));
     setProjDeadline(proj.deadline);
     setProjStatus(proj.status);
     setProjOwnerId(proj.leaderId);
@@ -266,9 +267,9 @@ export default function DepartmentsView({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskOwner, setNewTaskOwner] = useState('Unassigned');
-  const [newTaskStartDate, setNewTaskStartDate] = useState('2026-07-08');
+  const [newTaskStartDate, setNewTaskStartDate] = useState(() => addDaysISODate(0));
   const [newTaskStartTime, setNewTaskStartTime] = useState('09:00');
-  const [newTaskDueDate, setNewTaskDueDate] = useState('2026-07-11');
+  const [newTaskDueDate, setNewTaskDueDate] = useState(() => addDaysISODate(3));
   const [newTaskDueTime, setNewTaskDueTime] = useState('18:00');
   const [newTaskDueDays, setNewTaskDueDays] = useState(3);
 
@@ -455,7 +456,7 @@ export default function DepartmentsView({
     setEditingTaskId(task.id);
     setNewTaskName(task.name);
     setNewTaskOwner(task.assignedTo);
-    setNewTaskStartDate(task.startDate || '2026-07-08');
+    setNewTaskStartDate(task.startDate || addDaysISODate(0));
     setNewTaskStartTime(task.startTime || '09:00');
     setNewTaskDueDate(task.dueDate);
     setNewTaskDueTime(task.dueTime || '18:00');
@@ -1371,7 +1372,7 @@ export default function DepartmentsView({
 
                 <form id="project-form" onSubmit={handleProjectFormSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Name</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Name <span className="text-red-500">*</span></label>
                     <input
                       id="project-name-input"
                       type="text"
@@ -1384,7 +1385,7 @@ export default function DepartmentsView({
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Owner</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Project Owner <span className="text-red-500">*</span></label>
                     <select
                       id="project-owner-select"
                       required
@@ -1426,7 +1427,7 @@ export default function DepartmentsView({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Start Date</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Start Date <span className="text-red-500">*</span></label>
                       <input
                         id="project-startdate-input"
                         type="date"
@@ -1437,7 +1438,7 @@ export default function DepartmentsView({
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Deadline</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Deadline <span className="text-red-500">*</span></label>
                       <input
                         id="project-deadline-input"
                         type="date"
@@ -1726,12 +1727,7 @@ export default function DepartmentsView({
       {/* View Title & Dynamic Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Departments
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Monitor department efficiency metrics, task velocity, and project rosters.
-          </p>
+          
         </div>
 
         {/* Search + department management actions */}
@@ -1766,7 +1762,7 @@ export default function DepartmentsView({
         <table className="w-full text-left border-collapse text-xs">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-150 dark:border-slate-800/80 text-slate-500 dark:text-slate-400 font-bold">
-              <th className="p-3 w-28">ID</th>
+              <th className="p-3 w-28">Code</th>
               <th className="p-3">Department Name</th>
               <th className="p-3 w-16 text-center">%</th>
               <th className="p-3 w-24">Status</th>
@@ -1795,9 +1791,9 @@ export default function DepartmentsView({
                   onClick={() => handleDeptSelect(dept.id)}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-all cursor-pointer group"
                 >
-                  {/* ID */}
+                  {/* Code */}
                   <td className={`p-3 font-mono text-[11px] font-bold text-slate-400 dark:text-slate-500 ${rowAccent}`}>
-                    {dept.id.replace('dept-', 'DEPT-').toUpperCase()}
+                    {dept.code}
                   </td>
 
                   {/* Name */}
@@ -1930,7 +1926,7 @@ export default function DepartmentsView({
 
               <form id="dept-form" onSubmit={handleDeptFormSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department Name</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department Name <span className="text-red-500">*</span></label>
                   <input
                     id="dept-name-input"
                     type="text"
@@ -1943,7 +1939,7 @@ export default function DepartmentsView({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department Code</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department Code <span className="text-red-500">*</span></label>
                   <input
                     id="dept-code-input"
                     type="text"
