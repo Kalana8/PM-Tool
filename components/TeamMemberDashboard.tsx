@@ -30,6 +30,7 @@ interface TeamMemberDashboardProps {
   onSubmitDailyLog: (log: Omit<DailyWorkLog, 'id' | 'userId' | 'userName' | 'date'>) => void;
   onSubmitTaskWork: (taskId: string, workDone: string, notes: string, attachments: MediaFile[]) => void;
   onNavigate: (view: string, id?: string) => void;
+  onNotify: (message: string, variant?: 'error' | 'success') => void;
 }
 
 export default function TeamMemberDashboard({
@@ -42,7 +43,8 @@ export default function TeamMemberDashboard({
   onCheckOut,
   onSubmitDailyLog,
   onSubmitTaskWork,
-  onNavigate
+  onNavigate,
+  onNotify
 }: TeamMemberDashboardProps) {
   const myDepartment = departments.find((d) => d.id === currentUser.departmentId);
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -120,12 +122,12 @@ export default function TeamMemberDashboard({
     setNotesText('');
     setSimulatedFiles([]);
     setIsSubmitLogOpen(false);
-    alert('Daily work log submitted successfully! Captured on supervisor feed.');
+    onNotify('Daily work log submitted successfully! Captured on supervisor feed.', 'success');
   };
 
   const handleTaskSubmit = (taskId: string) => {
     if (!taskWorkText.trim()) {
-      alert('Please state what work has been completed.');
+      onNotify('Please state what work has been completed.');
       return;
     }
 
@@ -134,7 +136,7 @@ export default function TeamMemberDashboard({
     setTaskNotesText('');
     setSimulatedFiles([]);
     setUploadingTask(null);
-    alert('Task submission sent to your Team Leader review queue.');
+    onNotify('Task submission sent to your Team Leader review queue.', 'success');
   };
 
   return (

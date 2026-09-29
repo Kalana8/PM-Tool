@@ -11,10 +11,31 @@ import {
   Bookmark,
   ShieldCheck,
   RefreshCw,
-  LogOut
+  LogOut,
+  LayoutGrid,
+  CalendarCheck2,
+  Wallet,
+  Users,
+  Megaphone,
+  Truck,
+  FileEdit
 } from 'lucide-react';
 import { User, Notification } from '../lib/types';
 import ConfirmDialog from './ConfirmDialog';
+
+// The other BizYep tools, linked from the apps launcher in the header —
+// matches the same launcher on the main site's dashboard, minus Project
+// Management (this tool) and plus Supplier Management.
+// TODO: only Supplier Management has a real link so far — fill in the rest
+// once those subdomains exist.
+const APPS_MENU = [
+  { name: 'Booking & Scheduling', icon: CalendarCheck2, href: 'https://booklink.bizyep.com.au/overview' },
+  { name: 'Cash Flow', icon: Wallet, href: 'https://cash.bizyep.com.au/' },
+  { name: 'CRM', icon: Users, href: 'https://crm.bizyep.com.au/' },
+  { name: 'Content Planner', icon: Megaphone, href: 'https://smm.bizyep.com.au/content-tool/dashboard' },
+  { name: 'Supplier Management', icon: Truck, href: 'https://supplier.bizyep.com.au/' },
+  { name: 'Contract Manager', icon: FileEdit, href: 'https://contract.bizyep.com.au/' }
+];
 
 interface HeaderProps {
   currentView: string;
@@ -46,6 +67,7 @@ export default function Header({
   onSignOut
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAppsMenu, setShowAppsMenu] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -109,6 +131,47 @@ export default function Header({
         >
           <ShieldCheck className="h-3.5 w-3.5" />
           <span>{userRole}</span>
+        </div>
+
+        {/* Apps Launcher: quick links to the other BizYep tools */}
+        <div className="relative">
+          <button
+            id="apps-launcher-btn"
+            onClick={() => setShowAppsMenu(!showAppsMenu)}
+            title="Switch tools"
+            className={`rounded-xl border p-2 transition-all duration-200 cursor-pointer ${
+              showAppsMenu
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+            }`}
+          >
+            <LayoutGrid className="h-4.5 w-4.5" />
+          </button>
+
+          {showAppsMenu && (
+            <div
+              id="apps-launcher-menu"
+              className="absolute right-0 mt-2 w-64 origin-top-right rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-2 shadow-xl ring-1 ring-black/5 z-30"
+            >
+              {APPS_MENU.map((app) => {
+                const Icon = app.icon;
+                return (
+                  <a
+                    key={app.name}
+                    id={`apps-launcher-item-${app.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                    href={app.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setShowAppsMenu(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                  >
+                    <Icon className="h-4.5 w-4.5 text-gray-500 dark:text-gray-400 shrink-0" />
+                    {app.name}
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Dark Mode Toggle */}

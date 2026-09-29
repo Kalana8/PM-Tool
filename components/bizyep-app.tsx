@@ -66,6 +66,7 @@ import UsersView from './UsersView';
 import RolesView from './RolesView';
 import FilesView from './FilesView';
 import LoadingSpinner from './LoadingSpinner';
+import AlertDialog from './AlertDialog';
 import { Loader2, Copy, Check } from 'lucide-react';
 import { todayISODate } from '@/lib/date';
 
@@ -106,6 +107,10 @@ export function BizYepApp({
   const [businessNameDraft, setBusinessNameDraft] = useState('');
   const [savingBusinessName, setSavingBusinessName] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // In-app replacement for window.alert() — see AlertDialog.
+  const [alertState, setAlertState] = useState<{ message: string; variant: 'error' | 'success' } | null>(null);
+  const showAlert = (message: string, variant: 'error' | 'success' = 'error') => setAlertState({ message, variant });
 
   // Layout states
   const [currentView, setCurrentView] = useState<string>('Dashboard');
@@ -195,7 +200,7 @@ export function BizYepApp({
 
     const existing = data.attendance.find((a) => a.userId === currentUser.id && a.date === today);
     if (existing) {
-      alert('You are already checked in for today.');
+      showAlert('You are already checked in for today.');
       return;
     }
 
@@ -221,7 +226,7 @@ export function BizYepApp({
       await dbInsertAttendance(newRow, businessId);
       await dbInsertNotification(newNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to check in.');
+      showAlert(err instanceof Error ? err.message : 'Failed to check in.');
       return;
     }
 
@@ -259,7 +264,7 @@ export function BizYepApp({
       await dbUpdateAttendance(target.id, { checkOutTime: timeStr, workingHours });
       await dbInsertNotification(newNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to check out.');
+      showAlert(err instanceof Error ? err.message : 'Failed to check out.');
       return;
     }
 
@@ -286,7 +291,7 @@ export function BizYepApp({
     try {
       await dbInsertWorklog(newLog, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to submit daily log.');
+      showAlert(err instanceof Error ? err.message : 'Failed to submit daily log.');
       return;
     }
 
@@ -329,7 +334,7 @@ export function BizYepApp({
       await dbUpdateTask(taskId, { status: 'Review' });
       await dbInsertNotification(leaderNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to submit task work.');
+      showAlert(err instanceof Error ? err.message : 'Failed to submit task work.');
       return;
     }
 
@@ -364,7 +369,7 @@ export function BizYepApp({
       await dbUpdateTask(taskId, { status: 'Completed', progress: 100 });
       await dbInsertNotification(userNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to approve submission.');
+      showAlert(err instanceof Error ? err.message : 'Failed to approve submission.');
       return;
     }
 
@@ -413,7 +418,7 @@ export function BizYepApp({
       await dbInsertTaskComment(taskId, newComment, businessId);
       await dbInsertNotification(userNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to request revision.');
+      showAlert(err instanceof Error ? err.message : 'Failed to request revision.');
       return;
     }
 
@@ -452,7 +457,7 @@ export function BizYepApp({
     try {
       await dbInsertTaskComment(targetTask.id, newComment, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add comment.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add comment.');
       return;
     }
 
@@ -511,7 +516,7 @@ export function BizYepApp({
       await dbInsertTask(newTask, data.tasks.length, businessId);
       await dbInsertNotification(userNotif, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add task.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add task.');
       return;
     }
 
@@ -548,7 +553,7 @@ export function BizYepApp({
         );
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update task.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update task.');
       return;
     }
 
@@ -563,7 +568,7 @@ export function BizYepApp({
     try {
       await dbDeleteTask(taskId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete task.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete task.');
       return;
     }
 
@@ -587,7 +592,7 @@ export function BizYepApp({
         );
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update task status.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update task status.');
       return;
     }
 
@@ -612,7 +617,7 @@ export function BizYepApp({
         );
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reassign task.');
+      showAlert(err instanceof Error ? err.message : 'Failed to reassign task.');
       return;
     }
 
@@ -637,7 +642,7 @@ export function BizYepApp({
         `${currentUser.name} assigned you a subtask: "${newSubtask.name}" (under "${task?.name ?? 'a task'}").`
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add subtask.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add subtask.');
       return;
     }
 
@@ -675,7 +680,7 @@ export function BizYepApp({
         );
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update subtask.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update subtask.');
       return;
     }
 
@@ -694,7 +699,7 @@ export function BizYepApp({
     try {
       await dbDeleteSubtask(subtaskId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete subtask.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete subtask.');
       return;
     }
 
@@ -723,7 +728,7 @@ export function BizYepApp({
     try {
       await dbReorderTasks(updatedTasks.map((t) => t.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reorder tasks.');
+      showAlert(err instanceof Error ? err.message : 'Failed to reorder tasks.');
       return;
     }
 
@@ -734,7 +739,7 @@ export function BizYepApp({
     try {
       await dbReorderSubtasks(orderedSubtaskIds);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reorder subtasks.');
+      showAlert(err instanceof Error ? err.message : 'Failed to reorder subtasks.');
       return;
     }
 
@@ -762,7 +767,7 @@ export function BizYepApp({
     try {
       await dbInsertUser(newUser, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add employee.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add employee.');
       return;
     }
 
@@ -799,7 +804,7 @@ export function BizYepApp({
       if (!res.ok) throw new Error(body.error || 'Failed to create employee login.');
       created = body;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create employee login.');
+      showAlert(err instanceof Error ? err.message : 'Failed to create employee login.');
       return;
     }
 
@@ -827,7 +832,7 @@ export function BizYepApp({
       const password = await dbGetUserCredentials(userId);
       return { email: target.email, password };
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to load credentials.');
+      showAlert(err instanceof Error ? err.message : 'Failed to load credentials.');
       return null;
     }
   };
@@ -846,7 +851,7 @@ export function BizYepApp({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to reset password.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reset password.');
+      showAlert(err instanceof Error ? err.message : 'Failed to reset password.');
       return false;
     }
 
@@ -856,7 +861,7 @@ export function BizYepApp({
         ? data.credentialUserIds
         : [...data.credentialUserIds, userId]
     });
-    alert('Password reset. The employee must set a new password on their next login.');
+    showAlert('Password reset. The employee must set a new password on their next login.', 'success');
     return true;
   };
 
@@ -871,7 +876,7 @@ export function BizYepApp({
     try {
       await dbUpdateBusinessName(businessId, name);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update business name.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update business name.');
       return false;
     }
     window.location.reload();
@@ -891,10 +896,10 @@ export function BizYepApp({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to send email.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to send email.');
+      showAlert(err instanceof Error ? err.message : 'Failed to send email.');
       return false;
     }
-    alert('Task summary email sent.');
+    showAlert('Task summary email sent.', 'success');
     return true;
   };
 
@@ -902,7 +907,7 @@ export function BizYepApp({
     try {
       await dbDeleteUser(userId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete this account.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete this account.');
       return;
     }
 
@@ -920,7 +925,7 @@ export function BizYepApp({
     try {
       await dbUpdateUser(userId, { status: nextStatus });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update employee status.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update employee status.');
       return;
     }
 
@@ -943,7 +948,7 @@ export function BizYepApp({
         status: 'Active'
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to categorize this account.');
+      showAlert(err instanceof Error ? err.message : 'Failed to categorize this account.');
       return;
     }
 
@@ -978,7 +983,7 @@ export function BizYepApp({
     try {
       await dbDeclineUser(pendingUserId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to decline this account.');
+      showAlert(err instanceof Error ? err.message : 'Failed to decline this account.');
       return;
     }
 
@@ -1002,7 +1007,7 @@ export function BizYepApp({
         teamLeaderId: role?.baseLevel === 'team_member' ? updates.teamLeaderId : ''
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update this account.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update this account.');
       return;
     }
 
@@ -1038,10 +1043,10 @@ export function BizYepApp({
       });
       if (error) throw error;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to send password reset email.');
+      showAlert(err instanceof Error ? err.message : 'Failed to send password reset email.');
       return;
     }
-    alert(`Password reset email sent to: ${email}`);
+    showAlert(`Password reset email sent to: ${email}`, 'success');
   };
 
   // Role management is Admin-only (base_level, not a delegable permission —
@@ -1054,7 +1059,7 @@ export function BizYepApp({
     try {
       await dbInsertRole(newRole, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add role.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add role.');
       return;
     }
 
@@ -1065,7 +1070,7 @@ export function BizYepApp({
     try {
       await dbUpdateRole(roleId, updates);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update role.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update role.');
       return;
     }
 
@@ -1078,14 +1083,14 @@ export function BizYepApp({
 
   const handleDeleteRole = async (roleId: string) => {
     if (data.users.some((u) => u.roleId === roleId)) {
-      alert('Cannot delete a role that is still assigned to one or more users.');
+      showAlert('Cannot delete a role that is still assigned to one or more users.');
       return;
     }
 
     try {
       await dbDeleteRole(roleId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete role.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete role.');
       return;
     }
 
@@ -1101,7 +1106,7 @@ export function BizYepApp({
     try {
       await dbInsertDepartment(newDept, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add department.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add department.');
       return;
     }
 
@@ -1115,7 +1120,7 @@ export function BizYepApp({
     try {
       await dbUpdateDepartment(deptId, updates);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update department.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update department.');
       return;
     }
 
@@ -1129,7 +1134,7 @@ export function BizYepApp({
     try {
       await dbUpdateDepartment(deptId, { status });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update department status.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update department status.');
       return;
     }
 
@@ -1143,7 +1148,7 @@ export function BizYepApp({
     try {
       await dbDeleteDepartment(deptId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete department.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete department.');
       return;
     }
 
@@ -1170,7 +1175,7 @@ export function BizYepApp({
     try {
       await dbInsertProject(newProject, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add project.');
+      showAlert(err instanceof Error ? err.message : 'Failed to add project.');
       return;
     }
 
@@ -1184,7 +1189,7 @@ export function BizYepApp({
     try {
       await dbUpdateProject(projectId, updates, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update project.');
+      showAlert(err instanceof Error ? err.message : 'Failed to update project.');
       return;
     }
 
@@ -1198,7 +1203,7 @@ export function BizYepApp({
     try {
       await dbDeleteProject(projectId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete project.');
+      showAlert(err instanceof Error ? err.message : 'Failed to delete project.');
       return;
     }
 
@@ -1226,7 +1231,7 @@ export function BizYepApp({
     try {
       await dbInsertMediaFile(newFile, businessId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to upload media.');
+      showAlert(err instanceof Error ? err.message : 'Failed to upload media.');
       return;
     }
 
@@ -1242,7 +1247,7 @@ export function BizYepApp({
     try {
       await dbMarkAllNotificationsRead(unreadIds);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to mark notifications as read.');
+      showAlert(err instanceof Error ? err.message : 'Failed to mark notifications as read.');
       return;
     }
 
@@ -1336,6 +1341,14 @@ export function BizYepApp({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 flex transition-all duration-300 font-sans">
+      {/* In-app replacement for window.alert() popups */}
+      <AlertDialog
+        open={alertState !== null}
+        message={alertState?.message ?? ''}
+        variant={alertState?.variant}
+        onClose={() => setAlertState(null)}
+      />
+
       {/* Search overlay command palette */}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
@@ -1422,6 +1435,7 @@ export function BizYepApp({
                   onSubmitDailyLog={handleSubmitDailyLog}
                   onSubmitTaskWork={handleSubmitTaskWork}
                   onNavigate={handleSearchNavigate}
+                  onNotify={showAlert}
                 />
               )}
             </>
@@ -1477,6 +1491,7 @@ export function BizYepApp({
               onUpdateProjectStatus={handleUpdateProjectStatus}
               onUpdateProjectAssignee={handleUpdateProjectAssignee}
               onNavigate={handleSearchNavigate}
+              onNotify={showAlert}
             />
           )}
 
@@ -1574,6 +1589,7 @@ export function BizYepApp({
               media={visibleMedia}
               departments={visibleDepartments}
               onAddMedia={handleAddMedia}
+              onNotify={showAlert}
             />
           )}
 

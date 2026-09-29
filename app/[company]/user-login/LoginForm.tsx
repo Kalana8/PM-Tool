@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface Business {
@@ -9,19 +10,10 @@ interface Business {
   slug: string | null;
 }
 
-function BizYepMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400 shrink-0">
-      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-      <line x1="3" x2="21" y1="9" y2="9" />
-      <line x1="9" x2="9" y1="21" y2="9" />
-    </svg>
-  );
-}
-
 export function LoginForm({ business }: { business: Business }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -72,13 +64,20 @@ export function LoginForm({ business }: { business: Business }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-gray-100 dark:border-gray-900 bg-white dark:bg-gray-950 p-6 shadow-sm">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-900 pb-4 mb-5">
-          <BizYepMark />
-          <div>
-            <p className="text-sm font-extrabold tracking-tight text-gray-950 dark:text-gray-50">BizYep</p>
-            <p className="text-[11px] text-gray-400">Sign in to {business.name}</p>
-          </div>
+        <div className="flex items-center gap-3 mb-6">
+          <img src="/bizyep-logo.png" alt="BizYep" className="h-6 w-auto object-contain" />
+          <div className="h-5 w-px bg-gray-200 dark:bg-gray-800 shrink-0" />
+          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Project Management</span>
         </div>
+
+        <h1 className="text-xl font-extrabold text-gray-950 dark:text-gray-50 mb-1.5">
+          {showForgot ? "Reset your password" : "Accept your invitation"}
+        </h1>
+        {!showForgot && (
+          <p className="text-xs text-gray-400 mb-5">
+            Sign in with the email and password shared by your business owner.
+          </p>
+        )}
 
         {!showForgot ? (
           <div className="space-y-4">
@@ -95,17 +94,30 @@ export function LoginForm({ business }: { business: Business }) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Password</label>
-              <input
-                id="login-password-input"
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                onKeyDown={(e) => e.key === "Enter" && signIn()}
-              />
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                Password <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="login-password-input"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-transparent px-3 py-2 pr-9 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  onKeyDown={(e) => e.key === "Enter" && signIn()}
+                />
+                <button
+                  id="toggle-login-password-visibility"
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             </div>
 
             {error && <p className="text-xs text-red-600">{error}</p>}
@@ -116,7 +128,7 @@ export function LoginForm({ business }: { business: Business }) {
               disabled={loading}
               className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-md shadow-blue-500/10 disabled:opacity-60"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Signing in..." : "Log in & accept"}
             </button>
 
             <button
