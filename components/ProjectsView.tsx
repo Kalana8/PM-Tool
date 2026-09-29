@@ -16,7 +16,7 @@ import {
   Send,
   ExternalLink,
   ChevronRight,
-  FolderDot,
+  ArrowLeft,
   FileSpreadsheet,
   X,
   Play
@@ -39,6 +39,7 @@ interface ProjectsViewProps {
   onUpdateProjectStatus: (projectId: string, status: Project['status']) => void;
   onUpdateProjectAssignee: (projectId: string, assigneeId: string | undefined) => void;
   onNavigate: (view: string, id?: string) => void;
+  onNotify: (message: string, variant?: 'error' | 'success') => void;
 }
 
 type ProjectTab = 'overview' | 'tasks' | 'media' | 'comments';
@@ -55,7 +56,8 @@ export default function ProjectsView({
   onAddComment,
   onUpdateProjectStatus,
   onUpdateProjectAssignee,
-  onNavigate
+  onNavigate,
+  onNotify
 }: ProjectsViewProps) {
   const canEditStatus = hasAction(currentUser, 'projects.manage');
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
@@ -224,9 +226,7 @@ export default function ProjectsView({
 
   const tabs: Array<{ id: ProjectTab; label: string }> = [
     { id: 'overview', label: 'Overview & Milestones' },
-    { id: 'tasks', label: 'Tasks List' },
-    { id: 'media', label: 'Media Bento Library' },
-    { id: 'comments', label: 'Feed & Remarks' }
+    { id: 'tasks', label: 'Tasks List' }
   ];
 
   return (
@@ -235,9 +235,10 @@ export default function ProjectsView({
       <button
         id="back-to-portfolio"
         onClick={() => onProjectSelect(null)}
-        className="flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+        title="Back to Initiatives"
+        className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors text-gray-500 dark:text-gray-400"
       >
-        <FolderDot className="h-4 w-4" /> Back to Initiatives
+        <ArrowLeft className="h-4.5 w-4.5" />
       </button>
 
       {/* Hero Header block */}
@@ -600,7 +601,7 @@ export default function ProjectsView({
                               onClick={(e) => {
                                 if (file.type === 'document') {
                                   e.preventDefault();
-                                  alert(`Prototype Action: Downloading mock file '${file.name}'`);
+                                  onNotify(`Prototype Action: Downloading mock file '${file.name}'`);
                                 }
                               }}
                               className="font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"

@@ -21,12 +21,14 @@ interface FilesViewProps {
   media: MediaFile[];
   departments: Department[];
   onAddMedia: (file: Omit<MediaFile, 'id' | 'dateAdded'>) => void;
+  onNotify: (message: string, variant?: 'error' | 'success') => void;
 }
 
 export default function FilesView({
   media,
   departments,
-  onAddMedia
+  onAddMedia,
+  onNotify
 }: FilesViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video' | 'document'>('all');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
@@ -180,7 +182,7 @@ export default function FilesView({
                         onClick={(e) => {
                           if (file.type === 'document') {
                             e.preventDefault();
-                            alert(`Prototype Action: Downloading mock spec file '${file.name}'`);
+                            onNotify(`Prototype Action: Downloading mock spec file '${file.name}'`);
                           }
                         }}
                         className="font-bold text-blue-600 hover:underline flex items-center gap-0.5"
