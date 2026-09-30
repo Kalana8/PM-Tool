@@ -36,7 +36,17 @@ export default function AdminDashboard({
   const [selectedChartTab, setSelectedChartTab] = useState<'attendance' | 'tasks'>('attendance');
 
   // Basic stats calculators
-  const totalEmployees = users.filter(u => u.baseLevel === 'team_member').length;
+  // Staff Presence and the attendance chart measure team members: admins and
+  // leads also clock in but aren't in the total, so counting their rows gave
+  // impossible figures like 6/3. Each person counts once per day, Absent never.
+  const teamMemberIds = new Set(users.filter(u => u.baseLevel === 'team_member').map(u => u.id));
+  const totalEmployees = teamMemberIds.size;
+  const presentOn = (iso: string) =>
+    new Set(
+      attendance
+        .filter(a => a.date === iso && a.status !== 'Absent' && teamMemberIds.has(a.userId))
+        .map(a => a.userId)
+    ).size;
   const activeLeaders = users.filter(u => u.baseLevel === 'team_leader').length;
   const totalProjects = projects.length;
 
@@ -46,8 +56,7 @@ export default function AdminDashboard({
 
   // Attendance stats for today
   const todayStr = todayISODate();
-  const checkedInToday = attendance.filter(a => a.date === todayStr);
-  const presentCount = checkedInToday.length;
+  const presentCount = presentOn(todayStr);
 
   // Weekly Chart Data: last 7 calendar days, computed live from attendance & tasks
   const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -59,7 +68,7 @@ export default function AdminDashboard({
 
   const chartData = last7Days.map((d) => {
     const iso = d.toISOString().slice(0, 10);
-    const dayPresent = attendance.filter(a => a.date === iso && a.status !== 'Absent').length;
+    const dayPresent = presentOn(iso);
     const dayCompletedTasks = tasks.filter(t => t.status === 'Completed' && t.dueDate === iso).length;
     return {
       label: `${WEEKDAY_LABELS[d.getDay()]} ${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`,
