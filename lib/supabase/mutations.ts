@@ -7,6 +7,7 @@
 // businessId is threaded in from the caller (sourced from getActiveBusiness())
 // rather than a hardcoded constant, since every pm.* table is multi-tenant.
 import { supabase } from './pm-client';
+import { reportError } from '../report-error';
 import type {
   Department,
   User,
@@ -22,8 +23,12 @@ import type {
   Role
 } from '../types';
 
-const check = (error: { message: string } | null) => {
-  if (error) throw new Error(error.message);
+// Every failed write is also reported to the BizYep Monitor, named after the
+// function that failed.
+const check = (error: { message: string } | null, operation: string) => {
+  if (!error) return;
+  reportError(operation, error);
+  throw new Error(error.message);
 };
 
 // ---------------------------------------------------------------------------
@@ -39,7 +44,7 @@ export async function dbInsertDepartment(dept: Department, businessId: string) {
     description: dept.description,
     status: dept.status
   });
-  check(error);
+  check(error, 'dbInsertDepartment');
 }
 
 export async function dbUpdateDepartment(id: string, updates: Partial<Department>) {
@@ -50,12 +55,12 @@ export async function dbUpdateDepartment(id: string, updates: Partial<Department
   if (updates.description !== undefined) row.description = updates.description;
   if (updates.status !== undefined) row.status = updates.status;
   const { error } = await supabase.from('departments').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateDepartment');
 }
 
 export async function dbDeleteDepartment(id: string) {
   const { error } = await supabase.from('departments').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteDepartment');
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +81,7 @@ export async function dbInsertUser(user: User, businessId: string) {
     phone: user.phone ?? null,
     team_leader_id: user.teamLeaderId ?? null
   });
-  check(error);
+  check(error, 'dbInsertUser');
 }
 
 export async function dbUpdateUser(id: string, updates: Partial<User>) {
@@ -89,12 +94,12 @@ export async function dbUpdateUser(id: string, updates: Partial<User>) {
   if (updates.departmentId !== undefined) row.department_id = updates.departmentId;
   if (updates.teamLeaderId !== undefined) row.team_leader_id = updates.teamLeaderId || null;
   const { error } = await supabase.from('users').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateUser');
 }
 
 export async function dbDeclineUser(id: string) {
   const { error } = await supabase.from('users').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeclineUser');
 }
 
 // Removes only this tool's pm.users profile row — the actual login/business
@@ -102,7 +107,7 @@ export async function dbDeclineUser(id: string) {
 // app/api/admin/delete-user disposition in the port plan).
 export async function dbDeleteUser(id: string) {
   const { error } = await supabase.from('users').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteUser');
 }
 
 // Only readable by callers whose role currently has the 'users.manage_login'
@@ -110,7 +115,7 @@ export async function dbDeleteUser(id: string) {
 // written server-side by app/api/admin/create-employee, not from here.
 export async function dbGetUserCredentials(userId: string): Promise<string> {
   const { data, error } = await supabase.from('user_credentials').select('password').eq('user_id', userId).single();
-  check(error);
+  check(error, 'dbGetUserCredentials');
   return data!.password;
 }
 
@@ -118,7 +123,7 @@ export async function dbGetUserCredentials(userId: string): Promise<string> {
 // user sets their own password on first login.
 export async function dbClearMustChangePassword(userId: string) {
   const { error } = await supabase.from('users').update({ must_change_password: false }).eq('id', userId);
-  check(error);
+  check(error, 'dbClearMustChangePassword');
 }
 
 // Deletes the caller's own stored temp password (RLS: "self delete own
@@ -126,7 +131,7 @@ export async function dbClearMustChangePassword(userId: string) {
 // they set their own password, so it shouldn't stay visible to admins.
 export async function dbDeleteOwnCredentials(userId: string) {
   const { error } = await supabase.from('user_credentials').delete().eq('user_id', userId);
-  check(error);
+  check(error, 'dbDeleteOwnCredentials');
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +146,7 @@ export async function dbInsertRole(role: Role, businessId: string) {
     is_system: role.isSystem,
     permissions: role.permissions as any
   });
-  check(error);
+  check(error, 'dbInsertRole');
 }
 
 export async function dbUpdateRole(id: string, updates: Partial<Role>) {
@@ -150,12 +155,12 @@ export async function dbUpdateRole(id: string, updates: Partial<Role>) {
   if (updates.baseLevel !== undefined) row.base_level = updates.baseLevel;
   if (updates.permissions !== undefined) row.permissions = updates.permissions;
   const { error } = await supabase.from('roles').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateRole');
 }
 
 export async function dbDeleteRole(id: string) {
   const { error } = await supabase.from('roles').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteRole');
 }
 
 // ---------------------------------------------------------------------------
@@ -176,13 +181,13 @@ export async function dbInsertProject(project: Project, businessId: string) {
     assignee_id: project.assigneeId ?? null,
     notes: project.notes
   });
-  check(error);
+  check(error, 'dbInsertProject');
 
   if (project.members.length > 0) {
     const { error: memberError } = await supabase
       .from('project_members')
       .insert(project.members.map((userId) => ({ business_id: businessId, project_id: project.id, user_id: userId })));
-    check(memberError);
+    check(memberError, 'dbInsertProject');
   }
 }
 
@@ -200,24 +205,24 @@ export async function dbUpdateProject(id: string, updates: Partial<Project>, bus
   if (updates.notes !== undefined) row.notes = updates.notes;
   if (Object.keys(row).length > 0) {
     const { error } = await supabase.from('employee_projects').update(row as any).eq('id', id);
-    check(error);
+    check(error, 'dbUpdateProject');
   }
 
   if (updates.members !== undefined) {
     const { error: deleteError } = await supabase.from('project_members').delete().eq('project_id', id);
-    check(deleteError);
+    check(deleteError, 'dbUpdateProject');
     if (updates.members.length > 0) {
       const { error: insertError } = await supabase
         .from('project_members')
         .insert(updates.members.map((userId) => ({ business_id: businessId, project_id: id, user_id: userId })));
-      check(insertError);
+      check(insertError, 'dbUpdateProject');
     }
   }
 }
 
 export async function dbDeleteProject(id: string) {
   const { error } = await supabase.from('employee_projects').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteProject');
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +249,7 @@ export async function dbInsertTask(task: Task, position: number, businessId: str
     milestones: (task.milestones ?? []) as any,
     position
   });
-  check(error);
+  check(error, 'dbInsertTask');
 }
 
 export async function dbUpdateTask(id: string, updates: Partial<Task>) {
@@ -265,12 +270,12 @@ export async function dbUpdateTask(id: string, updates: Partial<Task>) {
   if (updates.assignedTo !== undefined) row.assigned_to = updates.assignedTo;
   if (updates.milestones !== undefined) row.milestones = updates.milestones;
   const { error } = await supabase.from('employee_tasks').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateTask');
 }
 
 export async function dbDeleteTask(id: string) {
   const { error } = await supabase.from('employee_tasks').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteTask');
 }
 
 export async function dbReorderTasks(orderedIds: string[]) {
@@ -294,7 +299,7 @@ export async function dbInsertSubtask(taskId: string, subtask: Subtask, position
     progress: subtask.progress,
     position
   });
-  check(error);
+  check(error, 'dbInsertSubtask');
 }
 
 export async function dbUpdateSubtask(id: string, updates: Partial<Subtask>) {
@@ -308,12 +313,12 @@ export async function dbUpdateSubtask(id: string, updates: Partial<Subtask>) {
   if (updates.dueDate !== undefined) row.due_date = updates.dueDate ?? null;
   if (updates.progress !== undefined) row.progress = updates.progress;
   const { error } = await supabase.from('subtasks').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateSubtask');
 }
 
 export async function dbDeleteSubtask(id: string) {
   const { error } = await supabase.from('subtasks').delete().eq('id', id);
-  check(error);
+  check(error, 'dbDeleteSubtask');
 }
 
 export async function dbReorderSubtasks(orderedIds: string[]) {
@@ -332,7 +337,7 @@ export async function dbInsertTaskComment(taskId: string, comment: TaskComment, 
     text: comment.text,
     timestamp: comment.timestamp
   });
-  check(error);
+  check(error, 'dbInsertTaskComment');
 }
 
 export async function dbInsertTaskSubmission(taskId: string, submission: TaskSubmission, businessId: string) {
@@ -348,7 +353,7 @@ export async function dbInsertTaskSubmission(taskId: string, submission: TaskSub
     status: submission.status,
     feedback: submission.feedback ?? null
   });
-  check(error);
+  check(error, 'dbInsertTaskSubmission');
 
   if (submission.attachments.length > 0) {
     const { error: attachError } = await supabase.from('task_submission_attachments').insert(
@@ -358,7 +363,7 @@ export async function dbInsertTaskSubmission(taskId: string, submission: TaskSub
         media_file_id: file.id
       }))
     );
-    check(attachError);
+    check(attachError, 'dbInsertTaskSubmission');
   }
 }
 
@@ -367,7 +372,7 @@ export async function dbUpdateTaskSubmission(id: string, updates: Partial<TaskSu
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.feedback !== undefined) row.feedback = updates.feedback ?? null;
   const { error } = await supabase.from('task_submissions').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateTaskSubmission');
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +392,7 @@ export async function dbInsertMediaFile(file: MediaFile, businessId: string) {
     project_id: file.projectId ?? null,
     department_id: file.departmentId ?? null
   });
-  check(error);
+  check(error, 'dbInsertMediaFile');
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +409,7 @@ export async function dbInsertAttendance(row: Attendance, businessId: string) {
     status: row.status,
     working_hours: row.workingHours ?? null
   });
-  check(error);
+  check(error, 'dbInsertAttendance');
 }
 
 export async function dbUpdateAttendance(id: string, updates: Partial<Attendance>) {
@@ -413,7 +418,7 @@ export async function dbUpdateAttendance(id: string, updates: Partial<Attendance
   if (updates.workingHours !== undefined) row.working_hours = updates.workingHours;
   if (updates.status !== undefined) row.status = updates.status;
   const { error } = await supabase.from('attendance').update(row as any).eq('id', id);
-  check(error);
+  check(error, 'dbUpdateAttendance');
 }
 
 // ---------------------------------------------------------------------------
@@ -430,13 +435,13 @@ export async function dbInsertNotification(notif: Notification, businessId: stri
     time: notif.time,
     read: notif.read
   });
-  check(error);
+  check(error, 'dbInsertNotification');
 }
 
 export async function dbMarkAllNotificationsRead(ids: string[]) {
   if (ids.length === 0) return;
   const { error } = await supabase.from('notifications').update({ read: true }).in('id', ids);
-  check(error);
+  check(error, 'dbMarkAllNotificationsRead');
 }
 
 // ---------------------------------------------------------------------------
@@ -453,7 +458,7 @@ export async function dbInsertWorklog(log: DailyWorkLog, businessId: string) {
     problems: log.problems,
     notes: log.notes
   });
-  check(error);
+  check(error, 'dbInsertWorklog');
 
   if (log.attachments.length > 0) {
     const { error: attachError } = await supabase
@@ -463,7 +468,7 @@ export async function dbInsertWorklog(log: DailyWorkLog, businessId: string) {
         daily_worklog_id: log.id,
         media_file_id: file.id
       })));
-    check(attachError);
+    check(attachError, 'dbInsertWorklog');
   }
 }
 
@@ -499,7 +504,7 @@ export async function dbUpdateBusinessName(businessId: string, name: string): Pr
       if (!data || data.length === 0) throw new Error(PERMISSION_ERROR);
       return candidate;
     }
-    if (error.code !== '23505') check(error);
+    if (error.code !== '23505') check(error, 'dbUpdateBusinessName');
   }
   throw new Error('Could not generate a unique login slug — try a more distinct business name.');
 }

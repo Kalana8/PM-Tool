@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportServerError } from "@/lib/report-server-error";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveBusiness } from "@/lib/get-active-business";
 import { isDemoSession, DEMO_EMAIL_BLOCKED } from "@/lib/demo-guard";
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
+    await reportServerError("api send-task-summary-email", "BREVO_API_KEY is not set");
     return NextResponse.json({ error: "Email sending isn't configured yet (missing BREVO_API_KEY)." }, { status: 500 });
   }
 
@@ -138,6 +140,7 @@ export async function POST(request: Request) {
 
   if (!emailRes.ok) {
     const errBody = await emailRes.json().catch(() => ({}));
+    await reportServerError("api send-task-summary-email", `Brevo HTTP ${emailRes.status}: ${errBody.message || "send failed"}`);
     return NextResponse.json({ error: errBody.message || "Failed to send email." }, { status: 502 });
   }
 

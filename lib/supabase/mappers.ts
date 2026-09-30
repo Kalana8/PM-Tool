@@ -20,6 +20,7 @@ import type {
   Role,
   RolePermissions
 } from '../types';
+import { reportError } from '../report-error';
 
 // ---------------------------------------------------------------------------
 // DB row -> app type
@@ -289,7 +290,10 @@ export async function fetchAllData(): Promise<AppData> {
     attendanceRes.error ||
     notificationsRes.error ||
     worklogsRes.error;
-  if (firstError) throw firstError;
+  if (firstError) {
+    reportError('fetchAllData', firstError);
+    throw firstError;
+  }
 
   const media = (mediaRes.data ?? []).map(mapMediaFile);
 

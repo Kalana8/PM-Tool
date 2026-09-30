@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportServerError } from "@/lib/report-server-error";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 /**
@@ -22,6 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ com
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
+    await reportServerError("api forgot-password", "SUPABASE_SERVICE_ROLE_KEY is not set");
     return NextResponse.json(
       { error: "Password reset isn't configured yet (missing SUPABASE_SERVICE_ROLE_KEY)." },
       { status: 500 }
