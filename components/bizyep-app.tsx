@@ -1033,17 +1033,16 @@ export function BizYepApp({
     });
   };
 
-  // Uses the standard Supabase Auth SDK call directly (same category as the
-  // guide's own getUser() snippet) rather than a custom reset-password page —
-  // flagged in the port notes as worth confirming with the lead, since the
-  // guide's Rule 1 lists "no password reset" among things not to build.
+  // Sent from the server (app/api/admin/send-password-reset), because
+  // Supabase's CAPTCHA check rejects a browser call that carries no token.
   const handleSendPasswordReset = async (email: string) => {
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin
+      const res = await fetch('/api/admin/send-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? 'Failed to send password reset email.');
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'Failed to send password reset email.');
       return;

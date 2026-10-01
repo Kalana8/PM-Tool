@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useTurnstile } from "@/components/turnstile";
 
 interface Business {
   id: string;
@@ -17,6 +18,7 @@ export function LoginForm({ business }: { business: Business }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const captcha = useTurnstile();
 
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -27,11 +29,17 @@ export function LoginForm({ business }: { business: Business }) {
   const [forgotDone, setForgotDone] = useState(false);
 
   async function signIn() {
+    if (!captcha.ready) return;
     setError("");
     setLoading(true);
     const supabase = createClient();
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken: captcha.token },
+    });
+    captcha.reset();
     if (signInError || !data.user) {
       setLoading(false);
       setError(signInError?.message ?? "Failed to sign in.");
@@ -120,12 +128,13 @@ export function LoginForm({ business }: { business: Business }) {
               </div>
             </div>
 
+            {captcha.widget}
             {error && <p className="text-xs text-red-600">{error}</p>}
 
             <button
               id="login-submit-btn"
               onClick={signIn}
-              disabled={loading}
+              disabled={loading || !captcha.ready}
               className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-md shadow-blue-500/10 disabled:opacity-60"
             >
               {loading ? "Signing In..." : "Log In And Accept"}

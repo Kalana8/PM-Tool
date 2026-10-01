@@ -2,12 +2,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useTurnstile } from "@/components/turnstile";
 
 /** Local development login. Hidden in production — real login lives on the portal. */
 export default function DevLogin() {
   const [email, setEmail] = useState("dev@test.com");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
+  const captcha = useTurnstile();
   const router = useRouter();
 
   if (process.env.NODE_ENV === "production") {
@@ -24,7 +26,9 @@ export default function DevLogin() {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      options: { captchaToken: captcha.token },
     });
+    captcha.reset();
     if (error) return setError(error.message);
     router.push("/");
     router.refresh();
@@ -47,8 +51,10 @@ export default function DevLogin() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="password"
         />
+        {captcha.widget}
         <button
           onClick={signIn}
+          disabled={!captcha.ready}
           className="w-full rounded bg-neutral-900 p-2 text-sm text-white hover:bg-neutral-700"
         >
           Sign in
